@@ -206,8 +206,9 @@ async function main() {
 
   const out = ['shoke-history/v1'];
   const meta = { target: 'rise-worker', rise_commit: commit, fixture: FIXTURE, seed: o.seed,
-    schema: o.schema, fault_rate: o.faultRate, mix: o.mix, deadline_ms: DEADLINE_MS, max_calls: 1,
-    menu_wpm: PACE_MENU, floor: false, sound_rank: ['silent:0',
+    schema: o.schema, fault_rate: o.faultRate, mix: o.mix, deadline_ms: DEADLINE_MS,
+    // The Worker's 8 s is a provider-call deadline (AbortSignal.timeout(8000) on the fetch).
+    deadline_scope: 'call', max_calls: 1, menu_wpm: PACE_MENU, floor: false, sound_rank: ['silent:0',
       ...Object.entries(SOUND_RANK).map(([id, [rank]]) => `${id}:${rank}`), 'other:2'].join(',') };
   // Written only when it differs from the default, so a default history is unchanged.
   if (o.turns !== 2) meta.turns = o.turns;

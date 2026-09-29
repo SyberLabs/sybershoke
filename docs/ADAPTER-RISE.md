@@ -95,7 +95,7 @@ P10.
 | P3 | **Confirmed** | Seed 7, 30% faults: all 25 faulted requests end in an error, none with a plan. I1, I3 and I5 pass. |
 | P4, P5 | **Confirmed** | I5 and I1 pass in every run. |
 | P6 | **Refuted** | I3 passes even without the Worker's key. With two asks per intent, a hit can only follow the model answer for its own cohort. Breaking it needs a third ask (cohort A answered, cohort B answered, then a hit on A), which this scenario never makes. Tested with `--turns` in round 2 below. |
-| P7 | **Confirmed** | Seed 3, timeouts only: 14 of 14 end at 8001 ms, 1 ms past a per-request 8 s. Whether the 8 s is per request or per call is for the spec's owner. |
+| P7 | **Confirmed** | Seed 3, timeouts only: 14 of 14 end at 8001 ms, 1 ms past a per-request 8 s. Whether the 8 s is per request or per call is for the spec's owner. Since resolved: the 8 s is per call ([Deadline scope](#deadline-scope)). |
 | P8 | **Confirmed in count, cause narrower** | Under the first sound rank (silent 0, night-drive 3, every other sound 2; commit `5253c37`), 7 I4 flags on the clean cases. All 7 were "soft" or "quiet" against a non-silent sound: the sound-rank mapping, not the Worker. None came from "calm" or "gentle"; those cases were recorded at 200 wpm or slower. With the rank read from RISE's descriptions, 4 remain: "I'd like a soft bossa nova backing." (r23, r65) and "Give the background a quiet mystery." (r26, r68). Jev chose the sound the reader named, and RISE describes bossa as "light" and mystery as "sparse", neither of which the rule reads as quiet. Whether they are quiet is for RISE to say. |
 | P9 | **Confirmed** | 7 calls replayed a recorded sound that was not on that turn's 9-sound shortlist and were marked `adapted=audio`. One of them is p1; its misfire comes from the override, not the substitution (the recorded pace, 100, was kept). |
 | P10 | **Confirmed** | Seed 7 twice gives byte-identical histories. |
@@ -152,6 +152,19 @@ the plans differ: that needs a provider that answers the same intent differently
 turns, and one recorded answer per intent is not that. The cohort case P6 described never arises:
 none of the 42 intents is open-ended, so every key ends in `:0`.
 
+## Deadline scope
+
+P7 was a wrong bar, not a Worker bug. RISE's own spec makes the 8 s a provider-call deadline:
+`docs/KEV-DEPLOYMENT.md` requires "every Kev request within the Worker's existing 8-second provider
+deadline", and `worker/jev-recommend.mjs` applies `AbortSignal.timeout(8000)` to the provider fetch
+only. I2 measured from request arrival, so the 1 ms spent before the call failed every timeout.
+
+A history can now say which bar it means (`meta deadline_scope=call`, [format](DESIGN.md#history-format)),
+and the adapter writes it. Under it, I2 times each provider call from `call` to `resp`. Seed 3,
+timeouts only: 14 of 14 timeouts end exactly 8000 ms after their call, and none fails I2.
+`adapters/rise-worker/check.sh` asserts both. Other histories, and REPORT.md, keep the default
+per-request bar.
+
 ## After the fix
 
 RISE fixed the misfire in [SyberLabs/RISE#306](https://github.com/SyberLabs/RISE/pull/306) and the
@@ -160,4 +173,4 @@ RISE's release pipeline confirmed that public production serves `a929768`, which
 `adapters/rise-worker/check.sh` checks whichever RISE it is given:
 
 - With `082b3fa`, it asserts the misfire, as before.
-- With a checkout that contains #306, it asserts no misfire. Against `a929768`: "P1 on a fixed Worker (RISE #306): no misfire". Every other assertion is unchanged, including the missing fallback (P3), which the fix does not address.
+- With a checkout that contains #306, it asserts no misfire. Against `a929768`: "P1 on a fixed Worker (RISE #306): no misfire". Every other assertion is unchanged, including the missing fallback (P3), which the fix does not address. The missing fallback is a deliberate product choice: on a provider failure RISE shows an error and the reader can start a sample reading.

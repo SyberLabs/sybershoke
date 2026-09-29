@@ -43,6 +43,10 @@ meta max_calls=2
 - Invariants read `deadline_ms` and `max_calls` from `meta`, so a file is self-describing. A value
   that does not parse, or a key repeated with a different value, is an input error. `shoke check`
   prints the bar it applied.
+- `meta deadline_scope=request|call` says what the deadline times. `request` (the default) is
+  arrival to the `decision` or `error`. `call` is each provider `call` to its `resp` with the same
+  `req` and `n`; a call with no `resp` fails, and a request with no call (a cache hit) only has to
+  end after it arrived. Any other value is an input error.
 - A real system may declare its own pace menu with `meta menu_wpm=100,150,...`; I1 uses it in place
   of the model's.
 - Line order does not matter: checking sorts events by time, and a same-time tie keeps file order.
@@ -85,8 +89,8 @@ The phases follow the Fanout rule that each must pass its exit test before the n
 |-------|-------|-----------|-------|
 | 1 | Core, history format, checkers | I1 to I5 each catch a hand-written violation | Done: `crates/shoke-jev/golden` |
 | 2 | Fault proxy for the RISE Worker, against recorded fixtures | Finds the keyword misfire and the missing fallback with a replayable seed | Passes against RISE `082b3fa`: `adapters/rise-worker/check.sh` |
-| 3 | Kev adapter | Zero-shot Kev against Jev on the 39-case eval, under faults | Blocked: no recorded Kev answers exist, and recording them means calling Kev |
-| 4 | Fanout integration | Kill a worker under both planners; zero lost, zero double-accepted | Not started |
+| 3 | Kev adapter | Zero-shot Kev against Jev on the 39-case eval, under faults | Deferred by the owner: recording Kev's answers needs a Modal GPU deployment (RISE's Deploy Kev workflow), not authorized yet |
+| 4 | Fanout integration | Kill a worker under both planners; zero lost, zero double-accepted | Dropped for now by the owner |
 | 5 | Report and write-up | Every published number reproduced by a script | Model report, red-team report and adapter results; each number has a script |
 
 ## Cautions

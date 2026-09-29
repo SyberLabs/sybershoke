@@ -169,6 +169,10 @@ fn check_rejects_histories_it_cannot_judge_and_names_its_bar() {
             "two-deadlines",
             "shoke-history/v1\nmeta deadline_ms=99999999\nmeta deadline_ms=8000\n0 req id=r1 text=x\n",
         ),
+        (
+            "bad-scope",
+            "shoke-history/v1\nmeta deadline_scope=provider\n0 req id=r1 text=x\n",
+        ),
     ];
     for (name, text) in cases {
         let f = temp_file(name);
@@ -178,8 +182,11 @@ fn check_rejects_histories_it_cannot_judge_and_names_its_bar() {
     }
     let o = shoke(&["check", &golden("clean.hist")]);
     assert!(
-        stdout(&o).contains("deadline_ms=8000 max_calls=2"),
+        stdout(&o).contains("deadline_ms=8000 max_calls=2 deadline_scope=request"),
         "{}",
         stdout(&o)
     );
+    let o = shoke(&["check", &golden("i2_call_scope.hist")]);
+    assert_eq!(code(&o), 0, "{}", stdout(&o));
+    assert!(stdout(&o).contains("deadline_scope=call"), "{}", stdout(&o));
 }
