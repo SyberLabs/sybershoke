@@ -232,14 +232,7 @@ pub fn simulate(cfg: &Config, sc: &Scenario) -> History {
             calls += 1;
             let mut rng = Rng::new(mix(sc.seed, idx as u64, calls as u64));
             h.push(Event::new(t, "call").with("req", &rq.id).with("n", calls));
-            let resp = provider::call(
-                cfg.profile,
-                &sc.faults,
-                &rq.text,
-                t,
-                &mut host,
-                &mut rng,
-            );
+            let resp = provider::call(cfg.profile, &sc.faults, &rq.text, t, &mut host, &mut rng);
             let arrive = t + resp.latency;
 
             let (rt, eff) = if !no_deadline && arrive > deadline_at {
@@ -413,7 +406,10 @@ mod tests {
         cfg.bugs.insert(Bug::CacheFallback);
         for seed in 0..40 {
             let h = simulate(&cfg, &scenario(seed));
-            assert!(h.events.iter().all(|e| e.get("origin").is_none_or(|o| o == "model")));
+            assert!(h
+                .events
+                .iter()
+                .all(|e| e.get("origin").is_none_or(|o| o == "model")));
         }
     }
 

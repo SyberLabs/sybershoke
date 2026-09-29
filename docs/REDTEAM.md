@@ -235,3 +235,54 @@ as in the report (`redteam/sensitivity.sh`):
 Name clearance, license and repository home are the owner's decisions. an unexplained lore item appears
 in no document I could read; I did not invent anything about it. No provider was called, nothing
 was published or pushed, and no maintainer was contacted.
+
+## Phase 2: what was fixed
+
+Each fix has a regression test that fails on the zip's code and passes now. Tests went from 76 to
+97. Every number in this document is reproduced by `redteam/sensitivity.sh`, `redteam/search.sh` or
+the `redteam` probe (`cargo run --release --manifest-path redteam/Cargo.toml -- MODE`) on the
+current tree. The one exception is a "before" figure, which needs the zip.
+
+| Finding | Fix | Regression test |
+|---|---|---|
+| R1 | I3 judges provenance from the plans: a hit must equal the latest earlier model answer for its key. The seeded bug no longer confesses. Probe `lying`: **0/200 → 25/200**. | `golden/i3_unlabelled_fallback.hist`, `i3_hit_before_answer.hist`; `sim::a_cached_fallback_is_labelled_as_a_model_answer` |
+| R2 | Stated in README and REPORT. I3 uses a system's own cache key when a history records `key=`; the RISE adapter does. | Adapter results, `docs/ADAPTER-RISE.md` |
+| R3 | REPORT says the counts are not rates and lists every assumption. The sensitivity script is committed. | `redteam/sensitivity.sh` reproduces the table above on the fixed tree |
+| R4 | Negation skips intensifiers; sleep idioms; the Worker's no-sound and no-visual phrasings; "loud" is a floor, and loud against quiet is a conflict. The hand-labelled `golden/phrases.tsv` is the independent oracle. | `tests/phrases.rs` (3 tests); 1 named gap: "quick nap before bed" |
+| R5 | The narrow override never overrules an explicit rule that asks for less. | `phrases::the_correct_pipeline_honours_the_hand_labels` |
+| R6 | Windows shrink from either end. REPORT's reproductions: 14978 → 250 ms (`no-validation`), 4381 → 250 ms (the three I2/I3 rows), 14978 → 7489 ms (`retry-storm`, which needs several calls). | `faults::a_window_can_shrink_onto_its_last_moment`, `faults::every_candidate_lowers_the_measure` |
+| R7 | `check` sorts by time. I2 rejects early answers, duplicate ids and orphans. Bad or conflicting limits and empty histories are input errors (exit 2). `check` prints its bar. | `checker::invariants_see_events_in_time_order_whatever_the_file_order`; 3 new I2 goldens and `i3_out_of_order.hist`; `invariants::unreadable_or_conflicting_limits_are_errors_not_defaults`; `cli::check_rejects_histories_it_cannot_judge_and_names_its_bar` |
+| R8 | Zero seeds, zero requests, a seed range past 2^64−1 and stray arguments are usage errors. `sweep` always runs exactly the seeds it reports. | `cli::inputs_that_would_pass_vacuously_are_usage_errors` |
+| R9 | The host records when a boot finishes; a call during the boot waits for it. r40 in the R9 example now times out. | `provider::a_call_during_a_cold_start_waits_for_it` |
+| R10 | I5 sorts by (time, id). | `invariants::i5_output_order_is_the_same_every_time` |
+| R11 | README and DESIGN corrected; `rust-version = "1.82"` declared. | Gates below |
+
+**What did not move.** Every count in REPORT tables 1 and 3 is unchanged. The I3 count of 25 is
+now earned from the plans, not from a label. `redteam/search.sh` on the fixed tree: 576,000
+correct-pipeline runs, zero violations.
+
+**Gates**, run on a fresh copy with no `target/`:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace`
+- `scripts/report.sh --check`
+
+## Still open
+
+- **Kev (roadmap phase 3) is blocked.** No recorded Kev answers exist in RISE: the "local-hf" records
+  are a MiniLM similarity baseline, not Kev. Recording Kev on the 39 cases means calling it, which
+  is the owner's decision. The roadmap's order then holds phase 4 (Fanout, I6), whose inputs were
+  not supplied either.
+- **I3's cohort case is unexercised.** The adapter asks each intent twice. Three asks would test
+  whether a stale cohort hit is caught (`docs/ADAPTER-RISE.md`, P6).
+- **I4 on real histories is only as good as the sound-rank mapping.** RISE does not rank its sounds
+  by loudness, so every "soft" or "quiet" request with a non-silent sound is flagged. That accounts
+  for all 7 clean-run I4 flags. A loudness rank for RISE's 24 sounds needs an owner.
+- **Whether 8 s is per request or per call** is a spec question. The Worker's own limit covers the
+  call, so every timeout is 1 ms past a per-request 8 s.
+- **CI has still never run on GitHub.** Its four steps pass locally on a fresh copy.
+- **The six project documents were never supplied.** Every fact this review took from them was
+  checked against the RISE source instead, or is listed as unverified above.
+- Not mine to decide: name clearance, license, repository home, the disclosure window, and the
+  an unexplained lore item, which appears in no document I had.

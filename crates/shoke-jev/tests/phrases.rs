@@ -60,7 +60,10 @@ fn the_checker_never_demands_what_a_person_would_not() {
     for (text, want) in labels() {
         for rule in expectations(&text) {
             let got = label_of(rule.expect);
-            assert!(want.iter().any(|w| w == got), "{text:?}: checker demands {got}, labels say {want:?}");
+            assert!(
+                want.iter().any(|w| w == got),
+                "{text:?}: checker demands {got}, labels say {want:?}"
+            );
         }
     }
 }
@@ -68,10 +71,17 @@ fn the_checker_never_demands_what_a_person_would_not() {
 #[test]
 fn the_checker_demands_everything_a_person_would_except_the_named_gaps() {
     for (text, want) in labels() {
-        let got: Vec<&str> = expectations(&text).iter().map(|r| label_of(r.expect)).collect();
+        let got: Vec<&str> = expectations(&text)
+            .iter()
+            .map(|r| label_of(r.expect))
+            .collect();
         let missing: Vec<&String> = want.iter().filter(|w| !got.contains(&w.as_str())).collect();
         let known = KNOWN_GAPS.contains(&text.as_str());
-        assert_eq!(missing.is_empty(), !known, "{text:?}: missing {missing:?} (known gap: {known})");
+        assert_eq!(
+            missing.is_empty(),
+            !known,
+            "{text:?}: missing {missing:?} (known gap: {known})"
+        );
     }
 }
 
@@ -80,7 +90,11 @@ fn the_correct_pipeline_honours_the_hand_labels() {
     for (text, want) in labels() {
         let sc = Scenario {
             seed: 1,
-            requests: vec![Request { id: "r1".into(), at: 500, text: text.clone() }],
+            requests: vec![Request {
+                id: "r1".into(),
+                at: 500,
+                text: text.clone(),
+            }],
             faults: Vec::new(),
         };
         let mut cfg = Config::new(Profile::Jev);
@@ -95,7 +109,10 @@ fn the_correct_pipeline_honours_the_hand_labels() {
             book: d.get_u64("book").unwrap() as u8,
         };
         for w in &want {
-            assert!(satisfies(w, &plan), "{text:?}: plan {plan:?} breaks the hand label {w}");
+            assert!(
+                satisfies(w, &plan),
+                "{text:?}: plan {plan:?} breaks the hand label {w}"
+            );
         }
     }
 }

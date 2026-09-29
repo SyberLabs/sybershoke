@@ -65,8 +65,12 @@ format ([spec](docs/DESIGN.md#history-format)) and run `shoke check FILE`.
   scale-to-zero host goes cold (120 s), the traffic pattern, the fault windows and the provider
   latencies. One change moves a count by up to eight times (`redteam/sensitivity.sh`). Only
   "caught" versus "not caught" survives.
-- **Not built yet:** the RISE Worker adapter, a Kev adapter, the Fanout target (I6), the static
-  trace page.
+- **The RISE Worker adapter** (`adapters/rise-worker/`) runs the real Worker source against
+  recorded Jev answers through the fault proxy. `adapters/rise-worker/check.sh /path/to/RISE` is the
+  phase 2 exit test; [results](docs/ADAPTER-RISE.md). It needs a RISE checkout and Node 22, so CI
+  does not run it.
+- **Not built yet:** a Kev adapter (no recorded Kev answers exist), the Fanout target (I6), the
+  static trace page.
 
 ## Relationship to the Week 0 scaffold
 
@@ -74,7 +78,8 @@ The Week 0 workspace (`shoke-core`, `shoke-sim`, `shoke`, the acceptance-key sim
 in an earlier session and was not available when this code was written. This workspace has its
 own small core with the same crate names and the `shoke-history/v1` format from the Week 1 plan.
 Before merging, reconcile the two `shoke-core` crates: the history format and the invariant trait
-are the parts that must agree. The Fanout target and I6 stay in the Week 0 simulator.
+are the parts that must agree. The Fanout target and I6 stay in the Week 0 simulator. Until the
+Week 0 scaffold is supplied, **this workspace is the base**.
 
 ## Red team
 

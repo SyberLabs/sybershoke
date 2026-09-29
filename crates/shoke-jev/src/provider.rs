@@ -298,7 +298,14 @@ mod tests {
     fn a_call_during_a_cold_start_waits_for_it() {
         let mut host = Host::warm_at(0);
         let at = IDLE_COLD_MS + 10_000;
-        let first = call(Profile::KevScaleToZero, &[], "x", at, &mut host, &mut Rng::new(1));
+        let first = call(
+            Profile::KevScaleToZero,
+            &[],
+            "x",
+            at,
+            &mut host,
+            &mut Rng::new(1),
+        );
         assert!(first.latency >= COLD_START_MS);
         // 1.6 s later the host is still booting: the answer cannot come before it is ready.
         let second = call(
@@ -309,7 +316,10 @@ mod tests {
             &mut host,
             &mut Rng::new(2),
         );
-        assert!(at + 1600 + second.latency >= at + first.latency, "{second:?}");
+        assert!(
+            at + 1600 + second.latency >= at + first.latency,
+            "{second:?}"
+        );
     }
 
     #[test]

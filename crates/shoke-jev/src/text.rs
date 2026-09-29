@@ -27,7 +27,12 @@ pub fn normalize(s: &str) -> String {
 /// A negation just before word `i`, looking past intensifiers: "not too fast" is not a fast request.
 fn negated(ws: &[String], i: usize) -> bool {
     let mut j = i;
-    while j > 0 && matches!(ws[j - 1].as_str(), "too" | "very" | "so" | "that" | "really") {
+    while j > 0
+        && matches!(
+            ws[j - 1].as_str(),
+            "too" | "very" | "so" | "that" | "really"
+        )
+    {
         j -= 1;
     }
     j > 0
@@ -137,8 +142,8 @@ pub fn expectations(text: &str) -> Vec<Rule> {
     let slow = has_any(
         &ws,
         &[
-            "slow", "slowly", "sleep", "sleepy", "asleep", "nap", "bed", "bedtime", "calm", "relax",
-            "relaxing", "gentle",
+            "slow", "slowly", "sleep", "sleepy", "asleep", "nap", "bed", "bedtime", "calm",
+            "relax", "relaxing", "gentle",
         ],
     );
     if fast && !slow {
@@ -253,9 +258,9 @@ pub fn requests_night_drive(text: &str, mode: NightDrive) -> bool {
             });
             // The night-drive look is fast, loud and neon. It must never overrule an explicit word
             // that asks for less, whatever phrasing carried it.
-            let asks_for_less = expectations(text).iter().any(|r| {
-                !matches!(r.expect, Expect::WpmAtLeast(_) | Expect::LoudnessAtLeast(_))
-            });
+            let asks_for_less = expectations(text)
+                .iter()
+                .any(|r| !matches!(r.expect, Expect::WpmAtLeast(_) | Expect::LoudnessAtLeast(_)));
             phrase && !blocked && !asks_for_less
         }
     }

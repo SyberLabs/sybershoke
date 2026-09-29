@@ -84,10 +84,10 @@ The phases follow the Fanout rule that each must pass its exit test before the n
 | Phase | Build | Exit test | State |
 |-------|-------|-----------|-------|
 | 1 | Core, history format, checkers | I1 to I5 each catch a hand-written violation | Done: `crates/shoke-jev/golden` |
-| 2 | Fault proxy for the RISE Worker, against recorded fixtures | Finds the keyword misfire and the missing fallback with a replayable seed | Modelled; the Worker adapter is not built |
-| 3 | Kev adapter | Zero-shot Kev against Jev on the 39-case eval, under faults | Not started |
+| 2 | Fault proxy for the RISE Worker, against recorded fixtures | Finds the keyword misfire and the missing fallback with a replayable seed | Passes against RISE `082b3fa`: `adapters/rise-worker/check.sh` |
+| 3 | Kev adapter | Zero-shot Kev against Jev on the 39-case eval, under faults | Blocked: no recorded Kev answers exist, and recording them means calling Kev |
 | 4 | Fanout integration | Kill a worker under both planners; zero lost, zero double-accepted | Not started |
-| 5 | Report and write-up | Every published number reproduced by a script | The report exists for the model only |
+| 5 | Report and write-up | Every published number reproduced by a script | Model report, red-team report and adapter results; each number has a script |
 
 ## Cautions
 

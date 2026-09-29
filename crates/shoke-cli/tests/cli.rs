@@ -177,5 +177,9 @@ fn check_rejects_histories_it_cannot_judge_and_names_its_bar() {
         let _ = std::fs::remove_file(f);
     }
     let o = shoke(&["check", &golden("clean.hist")]);
-    assert!(stdout(&o).contains("deadline_ms=8000 max_calls=2"), "{}", stdout(&o));
+    assert!(
+        stdout(&o).contains("deadline_ms=8000 max_calls=2"),
+        "{}",
+        stdout(&o)
+    );
 }

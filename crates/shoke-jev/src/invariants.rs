@@ -28,12 +28,18 @@ const DEFAULT_MAX_CALLS: u64 = 2;
 /// own bar, so an unreadable bar must never quietly become the default.
 pub fn limits(h: &History) -> Result<(u64, u64), String> {
     let one = |key: &str, default: u64| -> Result<u64, String> {
-        let mut values = h.meta.iter().filter(|(k, _)| k == key).map(|(_, v)| v.as_str());
+        let mut values = h
+            .meta
+            .iter()
+            .filter(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str());
         let Some(first) = values.next() else {
             return Ok(default);
         };
         if let Some(other) = values.find(|v| *v != first) {
-            return Err(format!("meta {key} is given twice: `{first}` and `{other}`"));
+            return Err(format!(
+                "meta {key} is given twice: `{first}` and `{other}`"
+            ));
         }
         first
             .parse()
@@ -549,7 +555,10 @@ mod tests {
         let mut h = History::new();
         h.add_meta("deadline_ms", 99_999_999);
         h.add_meta("deadline_ms", 8000);
-        assert!(limits(&h).is_err(), "first-wins would let a file pick its bar");
+        assert!(
+            limits(&h).is_err(),
+            "first-wins would let a file pick its bar"
+        );
         h.push(req(0, "r1", "x"));
         h.push(dec(60_000, "r1", "model", 200, 2, 1));
         assert_eq!(failing(&h, false), vec!["I2", "I5"]);
@@ -574,7 +583,11 @@ mod tests {
     #[test]
     fn a_history_can_declare_its_own_pace_menu() {
         let mut h = history(vec![req(0, "r1", "x"), dec(500, "r1", "model", 100, 2, 1)]);
-        assert_eq!(failing(&h, false), vec!["I1"], "100 is off the model's menu");
+        assert_eq!(
+            failing(&h, false),
+            vec!["I1"],
+            "100 is off the model's menu"
+        );
         h.add_meta("menu_wpm", "100,150,200");
         assert!(failing(&h, false).is_empty());
         h.meta.retain(|(k, _)| k != "menu_wpm");
