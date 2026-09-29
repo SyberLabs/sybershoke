@@ -173,4 +173,4 @@ RISE's release pipeline confirmed that public production serves `a929768`, which
 `adapters/rise-worker/check.sh` checks whichever RISE it is given:
 
 - With `082b3fa`, it asserts the misfire, as before.
-- With a checkout that contains #306, it asserts no misfire. Against `a929768`: "P1 on a fixed Worker (RISE #306): no misfire". Every other assertion is unchanged, including the missing fallback (P3), which the fix does not address.
+- With a checkout that contains #306, it asserts no misfire. Against `a929768`: "P1 on a fixed Worker (RISE #306): no misfire". Every other assertion is unchanged, including the missing fallback (P3), which the fix does not address. The missing fallback is a deliberate product choice: on a provider failure RISE shows an error and the reader can start a sample reading.

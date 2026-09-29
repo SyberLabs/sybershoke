@@ -71,8 +71,10 @@ format ([spec](docs/DESIGN.md#history-format)) and run `shoke check FILE`.
   recorded Jev answers through the fault proxy. `adapters/rise-worker/check.sh /path/to/RISE` is the
   phase 2 exit test; [results](docs/ADAPTER-RISE.md). It needs a RISE checkout and Node 22, so CI
   does not run it.
-- **Not built yet:** a Kev adapter (no recorded Kev answers exist), the Fanout target (I6), the
-  static trace page.
+- **Not built yet:** the static trace page, and a Kev adapter. Kev is deferred by the owner:
+  recording Kev's answers needs a Modal GPU deployment (RISE's Deploy Kev workflow), not authorized
+  yet.
+- **Out of scope for now:** the Fanout target (I6), dropped by the owner.
 
 ## Relationship to the Week 0 scaffold
 
@@ -91,6 +93,6 @@ each finding, and what was fixed. `redteam/` holds the probes, and `redteam/sear
 
 ## Open decisions
 
-The repository lives at `SyberLabs/sybershoke`. **No license is granted**, so the code is all
-rights reserved. Still open: **name clearance** (others already use "sybershoke") and the disclosure
-window before any third-party score is published.
+The repository lives at `SyberLabs/sybershoke`. The license is decided: **no license is granted**,
+all rights reserved. Still open: **name clearance** (others already use "sybershoke") and the
+disclosure window before any third-party score is published.

@@ -269,10 +269,12 @@ correct-pipeline runs, zero violations.
 
 ## Still open
 
-- **Kev (roadmap phase 3) is blocked.** No recorded Kev answers exist in RISE: the "local-hf" records
-  are a MiniLM similarity baseline, not Kev. Recording Kev on the 39 cases means calling it, which
-  is the owner's decision. The roadmap's order then holds phase 4 (Fanout, I6), whose inputs were
-  not supplied either.
+- **Kev (roadmap phase 3).** Deferred by the owner: recording Kev's answers needs a Modal GPU
+  deployment (RISE's Deploy Kev workflow), not authorized yet. No recorded Kev answers exist in
+  RISE: the "local-hf" records are a MiniLM similarity baseline, not Kev.
+- **Fanout (roadmap phase 4, I6)** was dropped for now by the owner.
+- **The missing fallback** is decided by the owner: on a provider failure RISE shows an error and
+  the reader can start a sample reading, with no preset floor. I7 stays an opt-in policy check.
 - **I3 on real histories cannot yet see a stale hit.** `--turns` now asks each intent up to 25
   times. The Worker does serve an older key's entry for the same text (70 times in 25 turns), but
   each intent replays one recorded answer, so the old and new plans are equal and I3 passes with
@@ -288,6 +290,6 @@ correct-pipeline runs, zero violations.
 - **CI has still never run on GitHub.** Its four steps pass locally on a fresh copy.
 - **The six project documents were never supplied.** Every fact this review took from them was
   checked against the RISE source instead, or is listed as unverified above.
-- The owner has since chosen the repository home (`SyberLabs/sybershoke`) and published it with no
-  license, so the code is all rights reserved. Name clearance and the disclosure window remain the
+- The owner has since chosen the repository home (`SyberLabs/sybershoke`) and decided to keep all
+  rights reserved: no license is granted. Name clearance and the disclosure window remain the
   owner's decisions.
