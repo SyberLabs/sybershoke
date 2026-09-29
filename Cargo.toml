@@ -5,6 +5,7 @@ members = ["crates/shoke-core", "crates/shoke-jev", "crates/shoke-cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.82"
 publish = false
 
 [profile.release]

@@ -108,10 +108,23 @@ pub fn render(seeds: u64, requests: usize, faults: usize, max_runs: u32) -> Stri
     .unwrap();
     writeln!(
         w,
-        "Two numbers are **assumptions**, not measurements: the idle time before a scale-to-zero \
-         host goes cold ({IDLE_COLD_MS} ms; the docs give the cold-start cost but not this \
-         threshold) and the traffic pattern (about one request in twelve follows a gap of 130 to \
-         200 seconds). Both are constants in `crates/shoke-jev`; change them and rerun.\n"
+        "The RISE Worker source differs from this model in ways that matter (`docs/REDTEAM.md`, R2): \
+         it makes one provider call per request, so it has no retries for `retry-storm` to break; its \
+         8000 ms limit covers the provider call only; its cache keys on the exact intent plus a \
+         variation cohort; and it has no fallback, so `cache-fallback` cannot happen until one is \
+         added.\n"
+    )
+    .unwrap();
+    writeln!(
+        w,
+        "**The counts below are not rates.** Each is the number of seeds on which a check failed, \
+         and it is set by assumptions, not measurements: the idle time before a scale-to-zero host \
+         goes cold ({IDLE_COLD_MS} ms; the docs give the cold-start cost but not this threshold), \
+         the traffic (about one request in twelve follows a gap of 130 to 200 seconds, one in four \
+         repeats an earlier request), the fault windows (1 to 16 seconds), and the provider \
+         latencies. Changing one of them moves a count by up to eight times \
+         (`redteam/sensitivity.sh`). What holds whatever the assumptions: whether a bug is caught \
+         at all (a count above zero), and that a floor removes every I7 failure.\n"
     )
     .unwrap();
     writeln!(
@@ -157,8 +170,11 @@ pub fn render(seeds: u64, requests: usize, faults: usize, max_runs: u32) -> Stri
     writeln!(w, "\n## 2. Seeded bugs and their smallest reproductions\n").unwrap();
     writeln!(
         w,
-        "Each bug removes one safeguard. The shrinker takes the first failing seed and removes \
-         faults, then shortens and moves the survivors, until the failure needs nothing more.\n"
+        "Each bug removes one safeguard, and none of them labels its own mistakes: a cached \
+         fallback is stored as an ordinary entry. The shrinker takes the first failing seed, \
+         removes faults, then trims each surviving window from either end and moves it earlier, \
+         until the invariant stops failing. It keeps the invariant failing, not necessarily the \
+         same request. A window longer than 250 ms had to cover several calls.\n"
     )
     .unwrap();
     writeln!(

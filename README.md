@@ -29,8 +29,8 @@ committed copy is stale. Same seed, same result, on every machine.
 | Id | Invariant |
 |----|-----------|
 | I1 | Every plan admitted to the reader is on the menu. |
-| I2 | Every request ends exactly once, within the deadline, and a failure keeps the reader's text. |
-| I3 | The decision cache never serves a degraded or a different plan. |
+| I2 | Every request ends exactly once, after it arrived and within the deadline, and a failure keeps the reader's text. |
+| I3 | Every cache hit equals the latest model answer for its key before it. Judged from the plans, never from a label. |
 | I4 | Explicit words are honoured: "slow" is not fast, "silent" is not loud, "no visuals" is off. |
 | I5 | No request makes more provider calls than the cap. |
 | I7 | (policy, opt-in) Every request is answered with a plan even when the provider fails. |
@@ -58,8 +58,13 @@ format ([spec](docs/DESIGN.md#history-format)) and run `shoke check FILE`.
   call a model, and it is not the RISE source.
 - **Findings are about that structure.** Whether the real Worker has the same failure needs the
   phase 2 adapter, run against recorded fixtures.
-- **Two constants are assumptions**, not measurements: how long a scale-to-zero host idles before
-  it goes cold (120 s) and the traffic pattern. Both are stated in the report.
+- **The RISE Worker source differs from the model** in ways that decide some findings: one provider
+  call per request (no retries), an 8 s limit on the provider call only, a cache keyed on the exact
+  intent plus a variation cohort, and no fallback. See [the red-team report](docs/REDTEAM.md), R2.
+- **Every count in the report is set by assumptions**, not measurements: the idle time before a
+  scale-to-zero host goes cold (120 s), the traffic pattern, the fault windows and the provider
+  latencies. One change moves a count by up to eight times (`redteam/sensitivity.sh`). Only
+  "caught" versus "not caught" survives.
 - **Not built yet:** the RISE Worker adapter, a Kev adapter, the Fanout target (I6), the static
   trace page.
 
@@ -70,6 +75,12 @@ in an earlier session and was not available when this code was written. This wor
 own small core with the same crate names and the `shoke-history/v1` format from the Week 1 plan.
 Before merging, reconcile the two `shoke-core` crates: the history format and the invariant trait
 are the parts that must agree. The Fanout target and I6 stay in the Week 0 simulator.
+
+## Red team
+
+[docs/REDTEAM.md](docs/REDTEAM.md) records an adversarial review of these claims, the evidence for
+each finding, and what was fixed. `redteam/` holds the probes, and `redteam/search.sh` and
+`redteam/sensitivity.sh` reproduce its numbers.
 
 ## Open decisions
 

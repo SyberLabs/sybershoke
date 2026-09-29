@@ -40,7 +40,11 @@ meta max_calls=2
 - Line one is the header. `meta key=value` lines carry configuration and may repeat.
 - An event is `<time_ms> <kind> key=value ...`. Kinds and keys use `A-Za-z0-9_.-`.
 - Values are percent-encoded: every byte except letters, digits and `- . _ ~ : , /` becomes `%XX`.
-- Invariants read `deadline_ms` and `max_calls` from `meta`, so a file is self-describing.
+- Invariants read `deadline_ms` and `max_calls` from `meta`, so a file is self-describing. A value
+  that does not parse, or a key repeated with a different value, is an input error. `shoke check`
+  prints the bar it applied.
+- Line order does not matter: checking sorts events by time, and a same-time tie keeps file order.
+- A history starts with an empty cache: a cache hit needs an earlier model answer for its key.
 
 Events the Jev/Kev invariants read:
 
@@ -49,21 +53,27 @@ Events the Jev/Kev invariants read:
 | `req` | `id`, `text` | A reader's request arrived. |
 | `call` | `req`, `n` | A provider call started. |
 | `resp` | `req`, `n`, `status` | It ended: `ok`, `http_429`, `http_503`, `http_500`, `truncated`, `out_of_menu`, `timeout`. |
-| `decision` | `req`, `source`, `origin`?, `wpm`, `sound`, `visual`, `book` | A plan was admitted. `source` is `model`, `cache` or `fallback`; `origin` says where a cached plan came from. |
+| `decision` | `req`, `source`, `key`?, `origin`?, `wpm`, `sound`, `visual`, `book` | A plan was admitted. `source` is `model`, `cache` or `fallback`. `key` is the system's own cache key when it reports one; otherwise I3 uses the normalized request text. `origin` is informational: I3 never trusts it. |
 | `error` | `req`, `reason`, `visible`, `preserved` | The request ended without a plan. |
 
 ## Why the checks are shaped this way
 
 - **I4 uses rule verifiers as its oracle.** "Fast means at least 250 wpm, silence means silent
   audio, no visuals means visuals off" are the most trusted labels in the post-training report.
-  Conflicting pace words ("fast" and "slow") produce no expectation rather than a wrong one.
+  Conflicting words ("fast" and "slow", "loud" and "quiet") produce no expectation rather than a
+  wrong one.
+- **The model and I4 share those rules, so I4 cannot grade the rules themselves.** A hand-labelled
+  phrase table (`crates/shoke-jev/golden/phrases.tsv`) is the independent oracle. The checker may
+  never demand more than it, and the correct pipeline must satisfy it.
 - **I7 is a policy, not a defect.** Without a preset floor a failed request ends in a visible error,
   which is correct behaviour under I2. I7 asks for more, and is switched on with `--require-floor`.
 - **The model is deliberately correct.** The stand-in for Jev or Kev honours every explicit word,
   so every violation comes from the pipeline around it.
 - **A seed is a bug report.** Traffic, fault windows and per-call latencies each draw from their
   own stream, so removing a fault never changes the others. That is what makes shrinking sound.
-- **Shrinking is time-aware.** After removing faults it shortens and moves the survivors.
+- **Shrinking is time-aware.** After removing faults it trims each window from either end, so it
+  can close in on the call that needs it, and moves windows earlier. It keeps the invariant failing,
+  not necessarily the same request.
 
 ## Phases
 
