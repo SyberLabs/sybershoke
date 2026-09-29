@@ -119,6 +119,14 @@ impl Invariant for PlansOnMenu {
         "admitted-plans-valid"
     }
     fn check(&self, h: &History) -> Vec<Violation> {
+        // A real system declares its own pace menu (`meta menu_wpm=100,150,...`).
+        let wpm_menu: Vec<u32> = match h.meta("menu_wpm") {
+            None => crate::menu::WPM.to_vec(),
+            Some(list) => match list.split(',').map(str::parse).collect() {
+                Ok(v) => v,
+                Err(_) => return bad_meta("I1", format!("meta menu_wpm=`{list}` is not a list")),
+            },
+        };
         let mut out = Vec::new();
         for e in h.of_kind("decision") {
             match plan_of(e) {
@@ -129,7 +137,7 @@ impl Invariant for PlansOnMenu {
                     detail: "decision has missing or non-numeric fields".into(),
                 }),
                 Some(p) => {
-                    for problem in p.problems() {
+                    for problem in p.problems_with(&wpm_menu) {
                         out.push(Violation {
                             invariant: "I1",
                             subject: req_of(e).to_string(),
@@ -561,6 +569,17 @@ mod tests {
         for _ in 0..20 {
             assert_eq!(check(&default_set(false), &h).render(), first);
         }
+    }
+
+    #[test]
+    fn a_history_can_declare_its_own_pace_menu() {
+        let mut h = history(vec![req(0, "r1", "x"), dec(500, "r1", "model", 100, 2, 1)]);
+        assert_eq!(failing(&h, false), vec!["I1"], "100 is off the model's menu");
+        h.add_meta("menu_wpm", "100,150,200");
+        assert!(failing(&h, false).is_empty());
+        h.meta.retain(|(k, _)| k != "menu_wpm");
+        h.add_meta("menu_wpm", "fast");
+        assert_eq!(failing(&h, false), vec!["I1"]);
     }
 
     #[test]

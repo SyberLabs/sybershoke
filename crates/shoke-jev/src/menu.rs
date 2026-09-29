@@ -31,8 +31,13 @@ pub struct Plan {
 impl Plan {
     /// Everything wrong with this plan; empty when it is on the menu.
     pub fn problems(&self) -> Vec<String> {
+        self.problems_with(&WPM)
+    }
+
+    /// As [`Plan::problems`], against a system's own pace menu.
+    pub fn problems_with(&self, wpm_menu: &[u32]) -> Vec<String> {
         let mut out = Vec::new();
-        if !WPM.contains(&self.wpm) {
+        if !wpm_menu.contains(&self.wpm) {
             out.push(format!("wpm={} is not on the menu", self.wpm));
         }
         if self.sound as usize >= SOUNDS.len() {

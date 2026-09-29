@@ -59,6 +59,11 @@ impl Report {
     }
 
     pub fn render(&self) -> String {
+        self.render_up_to(SHOWN)
+    }
+
+    /// As [`Report::render`], showing up to `shown` violations per invariant.
+    pub fn render_up_to(&self, shown: usize) -> String {
         let mut out = String::new();
         for r in &self.results {
             let verdict = if r.violations.is_empty() {
@@ -67,13 +72,13 @@ impl Report {
                 format!("FAIL ({})", r.violations.len())
             };
             out.push_str(&format!("{:<4}{:<28}{}\n", r.id, r.name, verdict));
-            for v in r.violations.iter().take(SHOWN) {
+            for v in r.violations.iter().take(shown) {
                 out.push_str(&format!("      {} @{}ms  {}\n", v.subject, v.at, v.detail));
             }
-            if r.violations.len() > SHOWN {
+            if r.violations.len() > shown {
                 out.push_str(&format!(
                     "      ...and {} more\n",
-                    r.violations.len() - SHOWN
+                    r.violations.len() - shown
                 ));
             }
         }
@@ -199,5 +204,7 @@ mod tests {
         }
         let r = check(&invs(), &h);
         assert!(r.render().contains("...and 3 more"));
+        assert!(!r.render_up_to(usize::MAX).contains("more"));
+        assert!(r.render_up_to(usize::MAX).contains("r7 @7ms"));
     }
 }

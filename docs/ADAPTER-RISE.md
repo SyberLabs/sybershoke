@@ -58,3 +58,31 @@ Probes, each replaying a recorded answer:
 
 Phase 2's exit test in the roadmap is "finds the keyword misfire and the missing fallback with a
 replayable seed". P1 and P3 are those two findings; P10 is the replayable seed.
+
+## Results against RISE `082b3fa`
+
+Reproduce with `adapters/rise-worker/check.sh /path/to/RISE`, which asserts P1, P2, P3, P7 and P10.
+
+| # | Outcome | Detail |
+|---|---|---|
+| P1 | **Confirmed** | "Help me drift off to sleep." comes back at 300 wpm with the night-drive beat and the neon palette; the recorded answer said 100 wpm. "Read slowly while I drift off, no music." comes back at 300 wpm and neon, and silent: the no-music words are honoured, the pace words are not. Both turns (r40, r41, r82, r83). The control p3 is untouched. |
+| P2 | **Confirmed** | Schema 2: p1 at 100 wpm, p2 at 150. |
+| P3 | **Confirmed** | Seed 7, 30% faults: all 25 faulted requests end in an error, none with a plan. I1, I3 and I5 pass. |
+| P4, P5 | **Confirmed** | I5 and I1 pass in every run. |
+| P6 | **Refuted** | I3 passes even without the Worker's key. With two asks per intent, a hit can only follow the model answer for its own cohort. Breaking it needs a third ask (cohort A answered, cohort B answered, then a hit on A), which this scenario never makes. Still open. |
+| P7 | **Confirmed** | Seed 3, timeouts only: 14 of 14 end at 8001 ms, 1 ms past a per-request 8 s. Whether the 8 s is per request or per call is for the spec's owner. |
+| P8 | **Confirmed in count, cause narrower** | 7 I4 flags on the clean cases. All 7 are "soft" or "quiet" against a non-silent sound: the sound-rank mapping, not the Worker. None came from "calm" or "gentle"; those cases were recorded at 200 wpm or slower. |
+| P9 | **Confirmed** | 7 calls replayed a recorded sound that was not on that turn's 9-sound shortlist and were marked `adapted=audio`. One of them is p1; its misfire comes from the override, not the substitution (the recorded pace, 100, was kept). |
+| P10 | **Confirmed** | Seed 7 twice gives byte-identical histories. |
+
+**Not predicted.** A truncated provider answer reaches the reader as `DECISION_UNAVAILABLE`, "Jev
+could not be reached." `response.json()` runs inside the `try` that wraps `fetch`, so a malformed
+answer is reported as an unreachable one (9 of 9 truncations in seed 7). No invariant covers error
+wording; this is a diagnosis problem, not a lost request.
+
+**One departure from the design above.** Middle and finale audio replay the recorded opening sound
+instead of the first offered choice. The first choice is `silent`, and it would have invented a
+sound arc the recording never had.
+
+The roadmap's phase 2 exit test ("finds the keyword misfire and the missing fallback with a
+replayable seed") passes against the real Worker source, driven by recorded answers.

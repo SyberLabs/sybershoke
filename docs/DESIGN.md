@@ -43,6 +43,8 @@ meta max_calls=2
 - Invariants read `deadline_ms` and `max_calls` from `meta`, so a file is self-describing. A value
   that does not parse, or a key repeated with a different value, is an input error. `shoke check`
   prints the bar it applied.
+- A real system may declare its own pace menu with `meta menu_wpm=100,150,...`; I1 uses it in place
+  of the model's.
 - Line order does not matter: checking sorts events by time, and a same-time tie keeps file order.
 - A history starts with an empty cache: a cache hit needs an earlier model answer for its key.
 

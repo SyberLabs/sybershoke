@@ -17,7 +17,7 @@ USAGE
   shoke run     [options]     simulate one seeded scenario, check it, exit 1 on a violation
   shoke sweep   [options]     many seeds: how often is each invariant broken
   shoke shrink  [options]     reduce the faults of one failing seed to a minimal set
-  shoke check   FILE [--require-floor]
+  shoke check   FILE [--require-floor] [--all]
                               check a shoke-history/v1 file written by anything
   shoke report  [--seeds N]   the full campaign as markdown (see scripts/report.sh)
   shoke bugs                  list the seeded bugs
@@ -36,6 +36,7 @@ OPTIONS
   --invariant ID    the invariant to shrink for (shrink)                   [first failing]
   --shrink          in sweep: also shrink the first failing seed of each invariant
   --max-runs N      shrinker budget                                        [500]
+  --all             in check: print every violation, not the first five
 
 EXIT CODES
   0 no violation   1 violation found   2 usage or input error
@@ -55,6 +56,7 @@ struct Opts {
     invariant: Option<String>,
     shrink: bool,
     max_runs: u32,
+    all: bool,
     positional: Vec<String>,
 }
 
@@ -74,6 +76,7 @@ impl Default for Opts {
             invariant: None,
             shrink: false,
             max_runs: 500,
+            all: false,
             positional: Vec::new(),
         }
     }
@@ -116,6 +119,7 @@ fn parse_opts(args: &[String]) -> Result<Opts, String> {
             "--floor" => o.floor = true,
             "--require-floor" => o.require_floor = true,
             "--shrink" => o.shrink = true,
+            "--all" => o.all = true,
             flag if flag.starts_with("--") => return Err(format!("unknown option `{flag}`")),
             _ => o.positional.push(arg.clone()),
         }
@@ -304,7 +308,11 @@ fn cmd_check(o: &Opts) -> Result<ExitCode, String> {
         history.events.len(),
         history.meta.len()
     );
-    print!("{}", report.render());
+    if o.all {
+        print!("{}", report.render_up_to(usize::MAX));
+    } else {
+        print!("{}", report.render());
+    }
     Ok(if report.passed() {
         ExitCode::SUCCESS
     } else {
