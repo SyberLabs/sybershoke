@@ -20,9 +20,15 @@ failing() { chk "$1" --require-floor | awk -v inv="$2" \
 
 # P1: schema 3 (what the production client sends). p1 and p2 are r40, r41 and r82, r83.
 run --seed 1 --schema 3 --out "$tmp/s3.hist" > "$tmp/s3.txt"
-slow=$(chk "$tmp/s3.hist" | grep '"slow/sleep/calm"' | awk '{print $1}' | sort -u | tr '\n' ' ')
-[ "$slow" = "r40 r41 r82 r83 " ] || fail "P1 misfire: slow violations on [$slow]"
-echo "P1 misfire, schema 3: 'drift off to sleep' raised to 300 wpm on $slow"
+ slow=$(chk "$tmp/s3.hist" | { grep '"slow/sleep/calm"' || true; } | awk '{print $1}' | sort -u | tr '\n' ' ')
+# RISE #306 (42d1c86) fixed the misfire. A checkout that contains it must show none.
+if git -C "$rise" merge-base --is-ancestor 42d1c86 HEAD 2>/dev/null; then
+  [ -z "$slow" ] || fail "fixed Worker: slow violations on [$slow]"
+  echo "P1 on a fixed Worker (RISE #306): no misfire"
+else
+  [ "$slow" = "r40 r41 r82 r83 " ] || fail "P1 misfire: slow violations on [$slow]"
+  echo "P1 misfire, schema 3: 'drift off to sleep' raised to 300 wpm on $slow"
+fi
 
 # P8, with the sound rank read from RISE's descriptions: on the 39 cases (not the probes r40-r42,
 # r82-r84), only "soft bossa" and "quiet mystery" stay flagged, on both turns.

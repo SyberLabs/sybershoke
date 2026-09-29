@@ -151,3 +151,13 @@ differed (`i3_catches_a_cache_hit_that_differs_from_the_model`). What this adapt
 the plans differ: that needs a provider that answers the same intent differently on different
 turns, and one recorded answer per intent is not that. The cohort case P6 described never arises:
 none of the 42 intents is open-ended, so every key ends in `:0`.
+
+## After the fix
+
+RISE fixed the misfire in [SyberLabs/RISE#306](https://github.com/SyberLabs/RISE/pull/306) and the
+hyphenated "drift-off" form in [SyberLabs/RISE#308](https://github.com/SyberLabs/RISE/pull/308).
+RISE's release pipeline confirmed that public production serves `a929768`, which contains both.
+`adapters/rise-worker/check.sh` checks whichever RISE it is given:
+
+- With `082b3fa`, it asserts the misfire, as before.
+- With a checkout that contains #306, it asserts no misfire. Against `a929768`: "P1 on a fixed Worker (RISE #306): no misfire". Every other assertion is unchanged, including the missing fallback (P3), which the fix does not address.
