@@ -23,32 +23,70 @@ use std::collections::HashMap;
 const DEFAULT_DEADLINE_MS: u64 = 8000;
 const DEFAULT_MAX_CALLS: u64 = 2;
 
+/// The one value a history gives for `key`, or `None` when it gives none. A key given twice with
+/// different values is an error: the file sets its own bar, so it must set it once.
+fn meta_once<'h>(h: &'h History, key: &str) -> Result<Option<&'h str>, String> {
+    let mut values = h
+        .meta
+        .iter()
+        .filter(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str());
+    let Some(first) = values.next() else {
+        return Ok(None);
+    };
+    if let Some(other) = values.find(|v| *v != first) {
+        return Err(format!(
+            "meta {key} is given twice: `{first}` and `{other}`"
+        ));
+    }
+    Ok(Some(first))
+}
+
 /// The deadline and call cap a history declares, or the defaults when it declares none. A value
 /// that does not parse, or a key given twice with different values, is an error: the file sets its
 /// own bar, so an unreadable bar must never quietly become the default.
 pub fn limits(h: &History) -> Result<(u64, u64), String> {
     let one = |key: &str, default: u64| -> Result<u64, String> {
-        let mut values = h
-            .meta
-            .iter()
-            .filter(|(k, _)| k == key)
-            .map(|(_, v)| v.as_str());
-        let Some(first) = values.next() else {
-            return Ok(default);
-        };
-        if let Some(other) = values.find(|v| *v != first) {
-            return Err(format!(
-                "meta {key} is given twice: `{first}` and `{other}`"
-            ));
+        match meta_once(h, key)? {
+            None => Ok(default),
+            Some(v) => v
+                .parse()
+                .map_err(|_| format!("meta {key}=`{v}` is not a whole number of the right unit")),
         }
-        first
-            .parse()
-            .map_err(|_| format!("meta {key}=`{first}` is not a whole number of the right unit"))
     };
     Ok((
         one("deadline_ms", DEFAULT_DEADLINE_MS)?,
         one("max_calls", DEFAULT_MAX_CALLS)?,
     ))
+}
+
+/// What the deadline times: the whole request, from arrival to its end (the default), or each
+/// provider call, from `call` to its `resp`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeadlineScope {
+    Request,
+    Call,
+}
+
+impl DeadlineScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeadlineScope::Request => "request",
+            DeadlineScope::Call => "call",
+        }
+    }
+}
+
+/// The `deadline_scope` a history declares, `request` when it declares none. Any other value is an
+/// error, for the same reason as in [`limits`].
+pub fn deadline_scope(h: &History) -> Result<DeadlineScope, String> {
+    match meta_once(h, "deadline_scope")? {
+        None | Some("request") => Ok(DeadlineScope::Request),
+        Some("call") => Ok(DeadlineScope::Call),
+        Some(v) => Err(format!(
+            "meta deadline_scope=`{v}` is neither `request` nor `call`"
+        )),
+    }
 }
 
 fn bad_meta(invariant: &'static str, detail: String) -> Vec<Violation> {
@@ -168,8 +206,8 @@ impl Invariant for AnswerOrVisibleError {
         "answer-or-visible-error"
     }
     fn check(&self, h: &History) -> Vec<Violation> {
-        let deadline = match limits(h) {
-            Ok((deadline, _)) => deadline,
+        let (deadline, scope) = match limits(h).and_then(|(d, _)| Ok((d, deadline_scope(h)?))) {
+            Ok(v) => v,
             Err(e) => return bad_meta("I2", e),
         };
         let mut out = Vec::new();
@@ -230,7 +268,7 @@ impl Invariant for AnswerOrVisibleError {
                 });
             }
             let took = end.t.saturating_sub(rq.t);
-            if took > deadline {
+            if scope == DeadlineScope::Request && took > deadline {
                 out.push(Violation {
                     invariant: "I2",
                     subject: id.to_string(),
@@ -257,8 +295,56 @@ impl Invariant for AnswerOrVisibleError {
                 }
             }
         }
+        if scope == DeadlineScope::Call {
+            out.extend(late_calls(h, deadline));
+        }
         out
     }
+}
+
+/// Under `deadline_scope=call`: every provider call must get its `resp` (same `req` and `n`)
+/// within the deadline. A call that never gets one is not known to have met it.
+fn late_calls(h: &History, deadline: u64) -> Vec<Violation> {
+    let mut out = Vec::new();
+    let mut open: HashMap<(&str, &str), &Event> = HashMap::new();
+    for e in &h.events {
+        let key = (req_of(e), e.get("n").unwrap_or("?"));
+        match e.kind.as_str() {
+            "call" => {
+                open.insert(key, e);
+            }
+            "resp" => {
+                if let Some(c) = open.remove(&key) {
+                    let took = e.t.saturating_sub(c.t);
+                    if took > deadline {
+                        out.push(Violation {
+                            invariant: "I2",
+                            subject: key.0.to_string(),
+                            at: e.t,
+                            detail: format!(
+                                "provider call {} answered after {took} ms, deadline is {deadline} ms",
+                                key.1
+                            ),
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut unanswered: Vec<&Event> = open.into_values().collect();
+    // Ties broken by id: iteration order of a HashMap must never reach the output.
+    unanswered.sort_by_key(|c| (c.t, req_of(c), c.get("n")));
+    out.extend(unanswered.into_iter().map(|c| Violation {
+        invariant: "I2",
+        subject: req_of(c).to_string(),
+        at: c.t,
+        detail: format!(
+            "provider call {} never got a response",
+            c.get("n").unwrap_or("?")
+        ),
+    }));
+    out
 }
 
 pub struct CacheNeverDegraded;
@@ -602,5 +688,138 @@ mod tests {
         h.push(req(0, "r1", "x"));
         h.push(dec(500, "r1", "model", 200, 2, 1));
         assert_eq!(failing(&h, false), vec!["I2"]);
+    }
+
+    fn call(t: u64, id: &str, n: u64) -> Event {
+        Event::new(t, "call").with("req", id).with("n", n)
+    }
+
+    fn resp(t: u64, id: &str, n: u64) -> Event {
+        Event::new(t, "resp").with("req", id).with("n", n)
+    }
+
+    fn timeout(t: u64, id: &str) -> Event {
+        Event::new(t, "error")
+            .with("req", id)
+            .with("reason", "timeout")
+            .with("visible", true)
+            .with("preserved", true)
+    }
+
+    fn call_scoped(events: Vec<Event>) -> History {
+        let mut h = history(events);
+        h.add_meta("deadline_scope", "call");
+        h
+    }
+
+    #[test]
+    fn call_scope_passes_a_call_answered_at_the_deadline() {
+        let h = call_scoped(vec![
+            req(0, "r1", "x"),
+            call(1, "r1", 1),
+            resp(8001, "r1", 1),
+            timeout(8001, "r1"),
+        ]);
+        assert!(failing(&h, false).is_empty());
+    }
+
+    #[test]
+    fn call_scope_fails_a_call_answered_1_ms_past_the_deadline() {
+        let h = call_scoped(vec![
+            req(0, "r1", "x"),
+            call(1, "r1", 1),
+            resp(8002, "r1", 1),
+            timeout(8002, "r1"),
+        ]);
+        assert_eq!(failing(&h, false), vec!["I2"]);
+        let report = check(&default_set(false), &h);
+        assert!(
+            report.violations_of("I2")[0].detail.contains("8001 ms"),
+            "{}",
+            report.render()
+        );
+    }
+
+    #[test]
+    fn call_scope_does_not_count_time_before_the_call() {
+        // 500 ms of work before the call, then a call that takes the whole 8 s: late for the
+        // request, on time for the call.
+        let events = vec![
+            req(0, "r1", "x"),
+            call(500, "r1", 1),
+            resp(8500, "r1", 1),
+            dec(8500, "r1", "model", 200, 2, 1),
+        ];
+        assert_eq!(failing(&history(events.clone()), false), vec!["I2"]);
+        assert!(failing(&call_scoped(events), false).is_empty());
+    }
+
+    #[test]
+    fn call_scope_matches_each_call_to_its_own_response() {
+        // Two calls for r1: n=1 on time, n=2 late. Two requests each with n=1: only r2 is late.
+        let h = call_scoped(vec![
+            req(0, "r1", "x"),
+            call(1, "r1", 1),
+            resp(100, "r1", 1),
+            call(101, "r1", 2),
+            req(200, "r2", "y"),
+            call(201, "r2", 1),
+            resp(300, "r2", 1),
+            dec(300, "r2", "model", 200, 2, 1),
+            resp(9000, "r1", 2),
+            timeout(9000, "r1"),
+        ]);
+        let report = check(&default_set(false), &h);
+        let subjects: Vec<&str> = report
+            .violations_of("I2")
+            .iter()
+            .map(|v| v.subject.as_str())
+            .collect();
+        assert_eq!(subjects, vec!["r1"], "{}", report.render());
+    }
+
+    #[test]
+    fn call_scope_fails_a_call_that_never_returns() {
+        let h = call_scoped(vec![
+            req(0, "r1", "x"),
+            call(1, "r1", 1),
+            timeout(8001, "r1"),
+        ]);
+        assert_eq!(failing(&h, false), vec!["I2"]);
+    }
+
+    #[test]
+    fn call_scope_keeps_the_other_i2_checks() {
+        // A cache hit with no call has no deadline, but must still end, and after it arrived.
+        let hit = call_scoped(vec![
+            req(0, "r1", "x"),
+            dec(60_000, "r1", "model", 200, 2, 1),
+        ]);
+        assert!(failing(&hit, false).is_empty());
+        let early = call_scoped(vec![
+            req(500, "r1", "x"),
+            dec(100, "r1", "model", 200, 2, 1),
+        ]);
+        assert_eq!(failing(&early, false), vec!["I2"]);
+        let missing = call_scoped(vec![req(0, "r1", "x")]);
+        assert_eq!(failing(&missing, false), vec!["I2"]);
+    }
+
+    #[test]
+    fn unknown_or_conflicting_deadline_scope_is_an_error() {
+        let mut h = History::new();
+        assert_eq!(deadline_scope(&h), Ok(DeadlineScope::Request));
+        h.add_meta("deadline_scope", "call");
+        assert_eq!(deadline_scope(&h), Ok(DeadlineScope::Call));
+        h.add_meta("deadline_scope", "request");
+        assert!(deadline_scope(&h).is_err(), "given twice");
+        let mut h = History::new();
+        h.add_meta("deadline_scope", "provider");
+        assert!(deadline_scope(&h).is_err());
+        h.push(req(0, "r1", "x"));
+        h.push(dec(100, "r1", "model", 200, 2, 1));
+        let report = check(&default_set(false), &h);
+        assert_eq!(report.failing(), vec!["I2"]);
+        assert_eq!(report.violations_of("I2")[0].subject, "meta");
     }
 }

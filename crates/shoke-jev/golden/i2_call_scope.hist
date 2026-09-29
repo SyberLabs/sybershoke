@@ -1,0 +1,19 @@
+# expect: none
+# The 8 s bar is on the provider call, as the RISE Worker's spec sets it (`deadline_scope=call`).
+# r1 spent 1 ms before calling, and the call timed out at exactly 8 s: the request ended 8001 ms
+# after it arrived, and that passes. r3 is a cache hit: no call, so no deadline beyond ending after
+# it arrived. Without the scope line this history fails I2 on r1.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+meta deadline_scope=call
+500 req id=r1 text=epic%20battle
+501 call req=r1 n=1
+8501 resp req=r1 n=1 status=timeout
+8501 error req=r1 reason=timeout visible=true preserved=true
+10000 req id=r2 text=slow%20and%20quiet
+10001 call req=r2 n=1
+10900 resp req=r2 n=1 status=ok
+10900 decision req=r2 source=model wpm=150 sound=1 visual=1 book=3
+20000 req id=r3 text=SLOW%20AND%20QUIET
+20002 decision req=r3 source=cache origin=model wpm=150 sound=1 visual=1 book=3

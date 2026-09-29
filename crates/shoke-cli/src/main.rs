@@ -3,7 +3,7 @@
 mod report;
 
 use shoke_core::{check, History, Invariant};
-use shoke_jev::invariants::limits;
+use shoke_jev::invariants::{deadline_scope, limits};
 use shoke_jev::{
     default_set, minimal, simulate, sweep, Bug, Config, JevFault, Mix, Profile, Scenario, SweepOpts,
 };
@@ -297,6 +297,7 @@ fn cmd_check(o: &Opts) -> Result<ExitCode, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
     let history = History::from_text(&text).map_err(|e| format!("{path}: {e}"))?;
     let (deadline, cap) = limits(&history).map_err(|e| format!("{path}: {e}"))?;
+    let scope = deadline_scope(&history).map_err(|e| format!("{path}: {e}"))?;
     if history.of_kind("req").next().is_none() {
         return Err(format!("{path}: no requests, so nothing to check"));
     }
@@ -304,9 +305,10 @@ fn cmd_check(o: &Opts) -> Result<ExitCode, String> {
     let report = check(&invs, &history);
     // The file sets its own bar, so say which bar was applied.
     println!(
-        "check {path}  ({} events, {} meta)  deadline_ms={deadline} max_calls={cap}",
+        "check {path}  ({} events, {} meta)  deadline_ms={deadline} max_calls={cap} deadline_scope={}",
         history.events.len(),
-        history.meta.len()
+        history.meta.len(),
+        scope.as_str()
     );
     if o.all {
         print!("{}", report.render_up_to(usize::MAX));
