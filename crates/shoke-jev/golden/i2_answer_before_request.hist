@@ -1,0 +1,7 @@
+# expect: I2
+# r1 is answered 41 s before it arrives.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+9000 decision req=r1 source=model wpm=200 sound=2 visual=1 book=0
+50000 req id=r1 text=hello

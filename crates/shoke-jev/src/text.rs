@@ -24,18 +24,39 @@ pub fn normalize(s: &str) -> String {
     words(s).join(" ")
 }
 
+/// A negation just before word `i`, looking past intensifiers: "not too fast" is not a fast request.
 fn negated(ws: &[String], i: usize) -> bool {
-    i > 0
+    let mut j = i;
+    while j > 0 && matches!(ws[j - 1].as_str(), "too" | "very" | "so" | "that" | "really") {
+        j -= 1;
+    }
+    j > 0
         && matches!(
-            ws[i - 1].as_str(),
-            "not" | "no" | "never" | "dont" | "t" | "without"
+            ws[j - 1].as_str(),
+            "not" | "no" | "never" | "dont" | "t" | "without" | "nothing"
         )
 }
 
 fn has_any(ws: &[String], list: &[&str]) -> bool {
-    ws.iter()
-        .enumerate()
-        .any(|(i, w)| list.contains(&w.as_str()) && !negated(ws, i))
+    ws.iter().enumerate().any(|(i, w)| {
+        // "fast asleep" means deeply asleep, not a fast pace.
+        let idiom = w == "fast" && ws.get(i + 1).is_some_and(|n| n == "asleep");
+        list.contains(&w.as_str()) && !negated(ws, i) && !idiom
+    })
+}
+
+/// A word from `first`, then optionally "any" or "moving", then a word from `second`:
+/// "no music", "without any audio", "no moving visuals".
+fn has_pair(ws: &[String], first: &[&str], second: &[&str]) -> bool {
+    (0..ws.len()).any(|i| {
+        first.contains(&ws[i].as_str()) && {
+            let mut j = i + 1;
+            while ws.get(j).is_some_and(|w| w == "any" || w == "moving") {
+                j += 1;
+            }
+            ws.get(j).is_some_and(|w| second.contains(&w.as_str()))
+        }
+    })
 }
 
 fn has_seq(ws: &[String], seq: &[&str]) -> bool {
@@ -50,6 +71,7 @@ pub enum Expect {
     WpmAtLeast(u32),
     WpmAtMost(u32),
     LoudnessAtMost(u8),
+    LoudnessAtLeast(u8),
     VisualOff,
 }
 
@@ -66,6 +88,7 @@ impl Rule {
             Expect::WpmAtLeast(n) => p.wpm >= n,
             Expect::WpmAtMost(n) => p.wpm <= n,
             Expect::LoudnessAtMost(n) => p.sound <= n,
+            Expect::LoudnessAtLeast(n) => p.sound >= n,
             Expect::VisualOff => p.visual == 0,
         }
     }
@@ -88,6 +111,13 @@ impl Rule {
                     .copied()
                     .unwrap_or("?")
             ),
+            Expect::LoudnessAtLeast(n) => format!(
+                "\"{}\" needs sound rank >= {} ({}), got {}",
+                self.cause,
+                n,
+                crate::menu::SOUNDS[n as usize],
+                p.sound
+            ),
             Expect::VisualOff => format!(
                 "\"{}\" needs visuals off, got visual={}",
                 self.cause, p.visual
@@ -96,8 +126,9 @@ impl Rule {
     }
 }
 
-/// What an explicit request obliges any correct plan to do. Conflicting pace words ("fast" and
-/// "slow" together) produce no pace expectation rather than a wrong one.
+/// What an explicit request obliges any correct plan to do. Conflicting words ("fast" and "slow",
+/// "loud" and "quiet") produce no expectation rather than a wrong one. The phrasings for no sound
+/// and no visuals follow the RISE Worker's own tests of explicit words.
 pub fn expectations(text: &str) -> Vec<Rule> {
     let ws = words(text);
     let mut rules = Vec::new();
@@ -106,7 +137,8 @@ pub fn expectations(text: &str) -> Vec<Rule> {
     let slow = has_any(
         &ws,
         &[
-            "slow", "slowly", "sleep", "sleepy", "calm", "relax", "relaxing", "gentle",
+            "slow", "slowly", "sleep", "sleepy", "asleep", "nap", "bed", "bedtime", "calm", "relax",
+            "relaxing", "gentle",
         ],
     );
     if fast && !slow {
@@ -122,11 +154,26 @@ pub fn expectations(text: &str) -> Vec<Rule> {
         });
     }
 
-    let silent = has_any(&ws, &["silent", "silence", "mute"])
-        || has_seq(&ws, &["no", "sound"])
-        || has_seq(&ws, &["without", "sound"]);
+    let silent = has_any(&ws, &["silent", "silence", "mute", "muted"])
+        || has_pair(
+            &ws,
+            &["no", "without", "skip", "avoid", "mute", "zero"],
+            &[
+                "sound",
+                "sounds",
+                "audio",
+                "music",
+                "soundscape",
+                "beat",
+                "soundtrack",
+            ],
+        )
+        || has_seq(&ws, &["sound", "off"]);
     let quiet = has_any(&ws, &["quiet", "quietly", "soft", "hushed"]);
-    if silent {
+    let loud = has_any(&ws, &["loud", "louder", "loudly"]);
+    if loud && (silent || quiet) {
+        // Contradiction: no sound expectation.
+    } else if silent {
         rules.push(Rule {
             cause: "silent",
             expect: Expect::LoudnessAtMost(0),
@@ -136,13 +183,25 @@ pub fn expectations(text: &str) -> Vec<Rule> {
             cause: "quiet",
             expect: Expect::LoudnessAtMost(1),
         });
+    } else if loud {
+        rules.push(Rule {
+            cause: "loud",
+            expect: Expect::LoudnessAtLeast(crate::menu::AMBIENT),
+        });
     }
 
-    let no_visuals = has_seq(&ws, &["no", "visuals"])
-        || has_seq(&ws, &["no", "visual"])
-        || has_seq(&ws, &["without", "visuals"])
+    let no_visuals = has_pair(
+        &ws,
+        &["no", "without", "skip", "avoid", "disable"],
+        &["visual", "visuals", "animation", "motion"],
+    ) || has_seq(&ws, &["turn", "off", "visuals"])
+        || has_seq(&ws, &["visuals", "off"])
+        || has_seq(&ws, &["visual", "off"])
+        || has_seq(&ws, &["dark", "screen"])
+        || has_seq(&ws, &["black", "screen"])
         || has_seq(&ws, &["just", "read"])
-        || has_seq(&ws, &["text", "only"]);
+        || has_seq(&ws, &["text", "only"])
+        || has_seq(&ws, &["reading", "only"]);
     if no_visuals {
         rules.push(Rule {
             cause: "no visuals",
@@ -192,7 +251,12 @@ pub fn requests_night_drive(text: &str, mode: NightDrive) -> bool {
                         | "without"
                 )
             });
-            phrase && !blocked
+            // The night-drive look is fast, loud and neon. It must never overrule an explicit word
+            // that asks for less, whatever phrasing carried it.
+            let asks_for_less = expectations(text).iter().any(|r| {
+                !matches!(r.expect, Expect::WpmAtLeast(_) | Expect::LoudnessAtLeast(_))
+            });
+            phrase && !blocked && !asks_for_less
         }
     }
 }

@@ -13,7 +13,7 @@
 //! the Fanout target, not to this one.
 //!
 //! All of them read only the history, and take deadline and cap from its `meta` lines, so they
-//! work on a file written by anything.
+//! work on a file written by anything. [`shoke_core::check`] hands them events in time order.
 
 use crate::menu::Plan;
 use crate::text::{expectations, normalize};
@@ -22,6 +22,46 @@ use std::collections::HashMap;
 
 const DEFAULT_DEADLINE_MS: u64 = 8000;
 const DEFAULT_MAX_CALLS: u64 = 2;
+
+/// The deadline and call cap a history declares, or the defaults when it declares none. A value
+/// that does not parse, or a key given twice with different values, is an error: the file sets its
+/// own bar, so an unreadable bar must never quietly become the default.
+pub fn limits(h: &History) -> Result<(u64, u64), String> {
+    let one = |key: &str, default: u64| -> Result<u64, String> {
+        let mut values = h.meta.iter().filter(|(k, _)| k == key).map(|(_, v)| v.as_str());
+        let Some(first) = values.next() else {
+            return Ok(default);
+        };
+        if let Some(other) = values.find(|v| *v != first) {
+            return Err(format!("meta {key} is given twice: `{first}` and `{other}`"));
+        }
+        first
+            .parse()
+            .map_err(|_| format!("meta {key}=`{first}` is not a whole number of the right unit"))
+    };
+    Ok((
+        one("deadline_ms", DEFAULT_DEADLINE_MS)?,
+        one("max_calls", DEFAULT_MAX_CALLS)?,
+    ))
+}
+
+fn bad_meta(invariant: &'static str, detail: String) -> Vec<Violation> {
+    vec![Violation {
+        invariant,
+        subject: "meta".into(),
+        at: 0,
+        detail,
+    }]
+}
+
+/// The cache key of a decision: the system's own key when it records one (the RISE Worker keys on
+/// the exact intent plus a variation cohort), otherwise the normalized request text.
+fn cache_key(e: &Event, text: Option<&str>) -> Option<String> {
+    match e.get("key") {
+        Some(k) => Some(k.to_string()),
+        None => text.map(normalize),
+    }
+}
 
 pub fn default_set(require_floor: bool) -> Vec<Box<dyn Invariant>> {
     let mut v: Vec<Box<dyn Invariant>> = vec![
@@ -50,10 +90,23 @@ fn req_of(e: &Event) -> &str {
     e.get("req").unwrap_or("?")
 }
 
-fn texts(h: &History) -> HashMap<String, String> {
-    h.of_kind("req")
-        .filter_map(|e| Some((e.get("id")?.to_string(), e.get("text")?.to_string())))
-        .collect()
+/// Each decision paired with the text of the latest request of its id that arrived before it.
+/// Events must be in time order, which [`shoke_core::check`] guarantees.
+fn decisions_with_text(h: &History) -> Vec<(&Event, Option<&str>)> {
+    let mut text: HashMap<&str, &str> = HashMap::new();
+    let mut out = Vec::new();
+    for e in &h.events {
+        match e.kind.as_str() {
+            "req" => {
+                if let (Some(id), Some(t)) = (e.get("id"), e.get("text")) {
+                    text.insert(id, t);
+                }
+            }
+            "decision" => out.push((e, text.get(req_of(e)).copied())),
+            _ => {}
+        }
+    }
+    out
 }
 
 pub struct PlansOnMenu;
@@ -101,14 +154,38 @@ impl Invariant for AnswerOrVisibleError {
         "answer-or-visible-error"
     }
     fn check(&self, h: &History) -> Vec<Violation> {
-        let deadline = h.meta_u64("deadline_ms").unwrap_or(DEFAULT_DEADLINE_MS);
+        let deadline = match limits(h) {
+            Ok((deadline, _)) => deadline,
+            Err(e) => return bad_meta("I2", e),
+        };
+        let mut out = Vec::new();
+        let mut arrivals: HashMap<&str, u64> = HashMap::new();
+        for rq in h.of_kind("req") {
+            let id = rq.get("id").unwrap_or("?");
+            if arrivals.insert(id, rq.t).is_some() {
+                out.push(Violation {
+                    invariant: "I2",
+                    subject: id.to_string(),
+                    at: rq.t,
+                    detail: "request id is used by more than one request".into(),
+                });
+            }
+        }
         let mut terminals: HashMap<&str, Vec<&Event>> = HashMap::new();
         for e in &h.events {
+            let names_a_request = matches!(e.kind.as_str(), "decision" | "error" | "call" | "resp");
+            if names_a_request && !arrivals.contains_key(req_of(e)) {
+                out.push(Violation {
+                    invariant: "I2",
+                    subject: req_of(e).to_string(),
+                    at: e.t,
+                    detail: format!("`{}` names a request that never arrived", e.kind),
+                });
+            }
             if e.kind == "decision" || e.kind == "error" {
                 terminals.entry(req_of(e)).or_default().push(e);
             }
         }
-        let mut out = Vec::new();
         for rq in h.of_kind("req") {
             let id = rq.get("id").unwrap_or("?");
             let ends = terminals.get(id).map(|v| v.as_slice()).unwrap_or(&[]);
@@ -130,6 +207,14 @@ impl Invariant for AnswerOrVisibleError {
                 });
             }
             let end = ends[0];
+            if end.t < rq.t {
+                out.push(Violation {
+                    invariant: "I2",
+                    subject: id.to_string(),
+                    at: end.t,
+                    detail: format!("ended {} ms before the request arrived", rq.t - end.t),
+                });
+            }
             let took = end.t.saturating_sub(rq.t);
             if took > deadline {
                 out.push(Violation {
@@ -172,41 +257,40 @@ impl Invariant for CacheNeverDegraded {
         "cache-never-degraded"
     }
     fn check(&self, h: &History) -> Vec<Violation> {
-        let texts = texts(h);
+        // Provenance comes from the history, never from the `origin` label: a cache that stored a
+        // fallback records it as an ordinary entry. So every hit must equal the latest model answer
+        // for its key that came before it. A history must therefore start with an empty cache.
         let mut model_plan: HashMap<String, Plan> = HashMap::new();
         let mut out = Vec::new();
-        for e in h.of_kind("decision") {
+        for (e, text) in decisions_with_text(h) {
             let id = req_of(e);
-            let Some(key) = texts.get(id).map(|t| normalize(t)) else {
+            let Some(key) = cache_key(e, text) else {
                 continue;
             };
             let Some(plan) = plan_of(e) else { continue };
+            let mut flag = |detail: String| {
+                out.push(Violation {
+                    invariant: "I3",
+                    subject: id.to_string(),
+                    at: e.t,
+                    detail,
+                })
+            };
             match e.get("source") {
                 Some("model") => {
                     model_plan.insert(key, plan);
                 }
-                Some("cache") => {
-                    if e.get("origin") != Some("model") {
-                        out.push(Violation {
-                            invariant: "I3",
-                            subject: id.to_string(),
-                            at: e.t,
-                            detail: format!(
-                                "cache served a {} plan as if the model had produced it",
-                                e.get("origin").unwrap_or("unknown-origin")
-                            ),
-                        });
-                    } else if let Some(prev) = model_plan.get(&key) {
-                        if *prev != plan {
-                            out.push(Violation {
-                                invariant: "I3",
-                                subject: id.to_string(),
-                                at: e.t,
-                                detail: "cache served a plan that differs from the model's".into(),
-                            });
+                Some("cache") => match model_plan.get(&key) {
+                    None => flag("cache hit with no earlier model answer for its key".into()),
+                    Some(prev) if *prev != plan => {
+                        flag("cache served a plan that differs from the latest model answer".into())
+                    }
+                    Some(_) => {
+                        if let Some(origin) = e.get("origin").filter(|o| *o != "model") {
+                            flag(format!("cache says it served a {origin} plan"));
                         }
                     }
-                }
+                },
                 _ => {}
             }
         }
@@ -224,11 +308,10 @@ impl Invariant for ExplicitWordsHonoured {
         "explicit-words-honoured"
     }
     fn check(&self, h: &History) -> Vec<Violation> {
-        let texts = texts(h);
         let mut out = Vec::new();
-        for e in h.of_kind("decision") {
+        for (e, text) in decisions_with_text(h) {
             let id = req_of(e);
-            let (Some(text), Some(plan)) = (texts.get(id), plan_of(e)) else {
+            let (Some(text), Some(plan)) = (text, plan_of(e)) else {
                 continue;
             };
             for rule in expectations(text) {
@@ -261,15 +344,22 @@ impl Invariant for RetryCap {
         "retry-cap"
     }
     fn check(&self, h: &History) -> Vec<Violation> {
-        let cap = h.meta_u64("max_calls").unwrap_or(DEFAULT_MAX_CALLS);
+        let cap = match limits(h) {
+            Ok((_, cap)) => cap,
+            Err(e) => return bad_meta("I5", e),
+        };
         let mut calls: HashMap<&str, (u64, u64)> = HashMap::new();
-        for e in h.of_kind("call") {
+        // A call without a known request is reported by I2, not counted here.
+        let known: std::collections::HashSet<&str> =
+            h.of_kind("req").filter_map(|e| e.get("id")).collect();
+        for e in h.of_kind("call").filter(|e| known.contains(req_of(e))) {
             let entry = calls.entry(req_of(e)).or_insert((0, e.t));
             entry.0 += 1;
             entry.1 = e.t;
         }
         let mut over: Vec<_> = calls.into_iter().filter(|(_, (n, _))| *n > cap).collect();
-        over.sort_by_key(|(_, (_, last))| *last);
+        // Ties broken by id: iteration order of a HashMap must never reach the output.
+        over.sort_by_key(|(id, (_, last))| (*last, *id));
         over.into_iter()
             .map(|(id, (n, last))| Violation {
                 invariant: "I5",
@@ -440,6 +530,37 @@ mod tests {
         ]);
         assert!(failing(&h, false).is_empty());
         assert_eq!(failing(&h, true), vec!["I7"]);
+    }
+
+    #[test]
+    fn unreadable_or_conflicting_limits_are_errors_not_defaults() {
+        let mut h = History::new();
+        assert_eq!(limits(&h), Ok((8000, 2)), "absent means default");
+        h.add_meta("deadline_ms", "8s");
+        assert!(limits(&h).is_err());
+        let mut h = History::new();
+        h.add_meta("deadline_ms", 99_999_999);
+        h.add_meta("deadline_ms", 8000);
+        assert!(limits(&h).is_err(), "first-wins would let a file pick its bar");
+        h.push(req(0, "r1", "x"));
+        h.push(dec(60_000, "r1", "model", 200, 2, 1));
+        assert_eq!(failing(&h, false), vec!["I2", "I5"]);
+    }
+
+    #[test]
+    fn i5_output_order_is_the_same_every_time() {
+        let mut events = Vec::new();
+        for id in ["ra", "rb", "rc", "rd", "re", "rf"] {
+            events.push(req(0, id, "x"));
+            for n in 1..=3 {
+                events.push(Event::new(5 * n, "call").with("req", id).with("n", n));
+            }
+        }
+        let h = history(events);
+        let first = check(&default_set(false), &h).render();
+        for _ in 0..20 {
+            assert_eq!(check(&default_set(false), &h).render(), first);
+        }
     }
 
     #[test]

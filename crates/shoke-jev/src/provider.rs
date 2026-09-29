@@ -83,6 +83,11 @@ pub fn apply_expectations(p: &mut Plan, text: &str) {
                     p.sound = n;
                 }
             }
+            Expect::LoudnessAtLeast(n) => {
+                if p.sound < n {
+                    p.sound = n;
+                }
+            }
             Expect::VisualOff => p.visual = 0,
         }
     }

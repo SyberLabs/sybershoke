@@ -85,7 +85,18 @@ impl Report {
     }
 }
 
+/// Invariants always see events in time order. A file written by anything need not be in it, and
+/// a verdict must not depend on line order. The sort is stable, so same-instant events keep theirs.
 pub fn check(invariants: &[Box<dyn Invariant>], history: &History) -> Report {
+    let sorted;
+    let history = if history.events.windows(2).all(|w| w[0].t <= w[1].t) {
+        history
+    } else {
+        let mut h = history.clone();
+        h.sort();
+        sorted = h;
+        &sorted
+    };
     Report {
         results: invariants
             .iter()
@@ -146,6 +157,38 @@ mod tests {
         assert_eq!(r.failing(), vec!["T1"]);
         assert_eq!(r.violations_of("T1")[0].subject, "r7");
         assert!(r.render().contains("r7 @9ms"));
+    }
+
+    /// Fails when the first event it sees is not the earliest one.
+    struct FirstIsEarliest;
+    impl Invariant for FirstIsEarliest {
+        fn id(&self) -> &'static str {
+            "T2"
+        }
+        fn name(&self) -> &'static str {
+            "first-is-earliest"
+        }
+        fn check(&self, h: &History) -> Vec<Violation> {
+            let min = h.events.iter().map(|e| e.t).min().unwrap_or(0);
+            match h.events.first() {
+                Some(e) if e.t != min => vec![Violation {
+                    invariant: "T2",
+                    subject: e.kind.clone(),
+                    at: e.t,
+                    detail: "saw events out of time order".into(),
+                }],
+                _ => Vec::new(),
+            }
+        }
+    }
+
+    #[test]
+    fn invariants_see_events_in_time_order_whatever_the_file_order() {
+        let mut h = History::new();
+        h.push(Event::new(20, "late"));
+        h.push(Event::new(5, "early"));
+        let invs: Vec<Box<dyn Invariant>> = vec![Box::new(FirstIsEarliest)];
+        assert!(check(&invs, &h).passed());
     }
 
     #[test]

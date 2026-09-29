@@ -304,7 +304,8 @@ pub fn simulate(cfg: &Config, sc: &Scenario) -> History {
                     let plan = provider::preset_floor(&rq.text);
                     h.push(decision(rt, &rq.id, "fallback", None, &plan));
                     if cfg.has(Bug::CacheFallback) {
-                        cache.insert(key, (rt, plan, "fallback"));
+                        // Stored as if the model had produced it: a real cache keeps no label.
+                        cache.insert(key, (rt, plan, "model"));
                     }
                 } else {
                     h.push(
@@ -402,6 +403,18 @@ mod tests {
         assert_eq!(h.meta("floor"), Some("true"));
         assert_eq!(h.meta("bugs"), Some("retry-storm"));
         assert_eq!(h.meta_u64("deadline_ms"), Some(8000));
+    }
+
+    #[test]
+    fn a_cached_fallback_is_labelled_as_a_model_answer() {
+        // The seeded bug must not confess: I3 has to find it from the plans alone.
+        let mut cfg = Config::new(Profile::Jev);
+        cfg.floor = true;
+        cfg.bugs.insert(Bug::CacheFallback);
+        for seed in 0..40 {
+            let h = simulate(&cfg, &scenario(seed));
+            assert!(h.events.iter().all(|e| e.get("origin").is_none_or(|o| o == "model")));
+        }
     }
 
     #[test]
