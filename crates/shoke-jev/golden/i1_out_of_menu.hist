@@ -1,0 +1,9 @@
+# expect: I1
+# The provider answered wpm=999 and the plan was admitted anyway. 999 is not on the menu.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=epic%20battle
+503 call req=r1 n=1
+1300 resp req=r1 n=1 status=ok
+1300 decision req=r1 source=model wpm=999 sound=2 visual=1 book=3

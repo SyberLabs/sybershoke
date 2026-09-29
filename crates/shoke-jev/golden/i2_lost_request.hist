@@ -1,0 +1,11 @@
+# expect: I2
+# The request failed and the error was shown, but the reader's text was dropped with it.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=epic%20battle
+503 call req=r1 n=1
+900 resp req=r1 n=1 status=http_503
+1150 call req=r1 n=2
+1400 resp req=r1 n=2 status=http_503
+1400 error req=r1 reason=http_503 visible=true preserved=false

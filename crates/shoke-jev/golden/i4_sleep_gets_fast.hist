@@ -1,0 +1,9 @@
+# expect: I4
+# "drift off to sleep" was read as the night-drive style and got 300 wpm, a synth score and neon.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=drift%20off%20to%20sleep
+503 call req=r1 n=1
+1300 resp req=r1 n=1 status=ok
+1300 decision req=r1 source=model wpm=300 sound=3 visual=3 book=3

@@ -1,0 +1,9 @@
+[package]
+name = "shoke-jev"
+description = "A virtual-time model of the Jev/Kev decision path, with a provider fault proxy and invariants."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+shoke-core = { path = "../shoke-core" }

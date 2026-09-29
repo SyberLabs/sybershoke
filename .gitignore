@@ -1,0 +1,3 @@
+/target
+*.hist
+!crates/shoke-jev/golden/*.hist

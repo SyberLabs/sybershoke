@@ -1,0 +1,12 @@
+# expect: none
+# A correct run: the reader asked for slow and quiet and got a slow, quiet plan in 700 ms.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=slow%20and%20quiet
+503 call req=r1 n=1
+1200 resp req=r1 n=1 status=ok
+1200 decision req=r1 source=model wpm=150 sound=1 visual=1 book=3
+# The same request again, in different case: served from the cache, same plan.
+5000 req id=r2 text=SLOW%20AND%20QUIET!
+5002 decision req=r2 source=cache origin=model wpm=150 sound=1 visual=1 book=3

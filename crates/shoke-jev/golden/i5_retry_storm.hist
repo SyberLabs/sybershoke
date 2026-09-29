@@ -1,0 +1,17 @@
+# expect: I5
+# Five provider calls for one request. The cap is two.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=epic%20battle
+503 call req=r1 n=1
+560 resp req=r1 n=1 status=http_503
+560 call req=r1 n=2
+610 resp req=r1 n=2 status=http_503
+610 call req=r1 n=3
+660 resp req=r1 n=3 status=http_503
+660 call req=r1 n=4
+710 resp req=r1 n=4 status=http_503
+710 call req=r1 n=5
+1500 resp req=r1 n=5 status=ok
+1500 decision req=r1 source=model wpm=200 sound=2 visual=1 book=3

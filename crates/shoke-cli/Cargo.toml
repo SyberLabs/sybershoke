@@ -1,0 +1,14 @@
+[package]
+name = "shoke-cli"
+description = "The `shoke` command line: run, sweep, shrink, check and report."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "shoke"
+path = "src/main.rs"
+
+[dependencies]
+shoke-core = { path = "../shoke-core" }
+shoke-jev = { path = "../shoke-jev" }
