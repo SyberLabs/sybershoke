@@ -43,6 +43,10 @@ meta max_calls=2
 - Invariants read `deadline_ms` and `max_calls` from `meta`, so a file is self-describing. A value
   that does not parse, or a key repeated with a different value, is an input error. `shoke check`
   prints the bar it applied.
+- `meta deadline_scope=request|call` says what the deadline times. `request` (the default) is
+  arrival to the `decision` or `error`. `call` is each provider `call` to its `resp` with the same
+  `req` and `n`; a call with no `resp` fails, and a request with no call (a cache hit) only has to
+  end after it arrived. Any other value is an input error.
 - A real system may declare its own pace menu with `meta menu_wpm=100,150,...`; I1 uses it in place
   of the model's.
 - Line order does not matter: checking sorts events by time, and a same-time tie keeps file order.

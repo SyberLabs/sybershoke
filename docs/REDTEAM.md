@@ -282,8 +282,9 @@ correct-pipeline runs, zero violations.
 - **The sound rank is read from RISE's descriptions, not owned by RISE.** It clears 3 of the 7
   clean-run I4 flags. The other 4 are "soft bossa" and "quiet mystery", whose descriptions say
   "light" and "sparse". Whether those are quiet is RISE's call (`docs/ADAPTER-RISE.md`, P8).
-- **Whether 8 s is per request or per call** is a spec question. The Worker's own limit covers the
-  call, so every timeout is 1 ms past a per-request 8 s.
+- **Resolved: the 8 s is per provider call.** RISE's `docs/KEV-DEPLOYMENT.md` calls it "the
+  Worker's existing 8-second provider deadline". The adapter's histories now say
+  `meta deadline_scope=call`, and no timeout fails I2 (`docs/ADAPTER-RISE.md`, Deadline scope).
 - **CI has still never run on GitHub.** Its four steps pass locally on a fresh copy.
 - **The six project documents were never supplied.** Every fact this review took from them was
   checked against the RISE source instead, or is listed as unverified above.
