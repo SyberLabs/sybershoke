@@ -1,0 +1,9 @@
+[package]
+name = "shoke-core"
+description = "Sybershoke core: seeded randomness, history format, invariant checker, shrinker. No dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]

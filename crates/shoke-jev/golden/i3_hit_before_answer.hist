@@ -1,0 +1,11 @@
+# expect: I3
+# r2 was served from the cache 1.9 s before the model answered r1: a hit with nothing behind it.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=hello
+503 call req=r1 n=1
+600 req id=r2 text=hello
+602 decision req=r2 source=cache origin=model wpm=150 sound=0 visual=0 book=3
+2500 resp req=r1 n=1 status=ok
+2500 decision req=r1 source=model wpm=200 sound=2 visual=1 book=0

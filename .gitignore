@@ -1,0 +1,5 @@
+/target
+*.hist
+!crates/shoke-jev/golden/*.hist
+!redteam/histories/*.hist
+/redteam/target

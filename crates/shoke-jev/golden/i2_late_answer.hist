@@ -1,0 +1,9 @@
+# expect: I2
+# The Worker waited 11.5 seconds for a cold provider. The deadline is 8 seconds.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=epic%20battle
+503 call req=r1 n=1
+12000 resp req=r1 n=1 status=ok
+12000 decision req=r1 source=model wpm=200 sound=2 visual=1 book=3

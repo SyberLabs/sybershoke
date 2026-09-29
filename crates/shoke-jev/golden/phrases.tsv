@@ -1,0 +1,55 @@
+# Hand labels: what a careful reader says each request explicitly requires. Written by a person,
+# never generated from `text::expectations`, so it is an oracle the checker does not share.
+# Labels: fast (>= 250 wpm), slow (<= 200 wpm), silent, quiet (rain or quieter), loud (ambient or
+# louder), novisuals, or - for nothing explicit. A contradiction ("fast ... slow") requires nothing.
+# The no-sound and no-visual phrasings follow the RISE Worker's own tests of explicit words
+# (requestsNoSound, requestsNoVisualMotion in worker/jev-recommend.mjs @ 082b3fa).
+tokyo drift	-
+night drive	-
+drift	-
+drift off to sleep	slow
+help me sleep	slow
+slow and quiet	slow,quiet
+calm rain	slow
+something relaxing	slow
+epic battle	-
+fast and funny	fast
+fast racing	fast
+fast and loud	fast,loud
+fast and loud, silent	fast
+fast and loud and quiet	fast
+silent reading	silent
+quiet evening	quiet
+no visuals just read	novisuals
+just read, no visuals	novisuals
+tokyo drift but slow	slow
+drift off to sleep fast	-
+no sound	silent
+no sounds	silent
+no music	silent
+without audio	silent
+sound off	silent
+muted	silent
+mute	silent
+not silent	-
+visuals off	novisuals
+turn visuals off	novisuals
+text only	novisuals
+dark screen	novisuals
+reading only	novisuals
+no animation	novisuals
+not too fast	-
+nothing fast	-
+not slow	-
+fast asleep	slow
+quick nap before bed	slow
+fall asleep quickly	slow
+tokyo drift, just read	novisuals
+night drive, mute	silent
+tokyo drift, soft	quiet
+hushed night drive	quiet
+night drive text only	novisuals
+tokyo drift, turn visuals off	novisuals
+night drive, no music	silent
+loud and fast	fast,loud
+something loud but quiet	-

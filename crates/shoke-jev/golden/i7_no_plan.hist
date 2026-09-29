@@ -1,0 +1,12 @@
+# expect: I7
+# flags: require-floor
+# The provider was cold. The Worker gave up at the deadline and showed an error, keeping the
+# request text. That is a correct failure (I2 passes) but not an answer: I7 fails, and only when
+# the system is supposed to have a preset floor.
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 req id=r1 text=epic%20battle
+503 call req=r1 n=1
+8500 resp req=r1 n=1 status=timeout
+8500 error req=r1 reason=timeout visible=true preserved=true
