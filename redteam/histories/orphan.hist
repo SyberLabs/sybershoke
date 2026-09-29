@@ -1,0 +1,4 @@
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+500 decision req=ghost source=model wpm=999 sound=9 visual=9 book=99

@@ -1,0 +1,11 @@
+[package]
+name = "shoke-redteam"
+version = "0.0.0"
+edition = "2021"
+[workspace]
+[dependencies]
+shoke-core = { path = "../crates/shoke-core" }
+shoke-jev = { path = "../crates/shoke-jev" }
+[profile.release]
+debug-assertions = true
+overflow-checks = true

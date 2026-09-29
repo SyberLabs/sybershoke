@@ -1,0 +1,6 @@
+shoke-history/v1
+meta deadline_ms=8000
+meta max_calls=2
+1 call n=1
+2 call n=1
+3 call n=1
