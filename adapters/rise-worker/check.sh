@@ -43,6 +43,27 @@ late=$(chk "$tmp/t.hist" | grep -c 'answered after 8001 ms' || true)
 [ "$timeouts" -eq "$late" ] || fail "P7: $timeouts timeouts, $late late"
 echo "P7 deadline: $late of $timeouts timeouts end at 8001 ms"
 
+# Q1-Q4: I3 over 3 and 25 turns, with and without the Worker's key.
+# Cache hits whose key differs from the latest model answer's key for the same text, then the first.
+stale() { awk '$2=="req" { for (i = 3; i <= NF; i++) if ($i ~ /^id=/) id = substr($i, 4);
+    else if ($i ~ /^text=/) text[id] = substr($i, 6) }
+  $2=="decision" { for (i = 3; i <= NF; i++) { split($i, kv, "="); f[kv[1]] = substr($i, length(kv[1]) + 2) }
+    t = text[f["req"]]; if (f["source"] == "model") last[t] = f["key"]
+    else if (last[t] != f["key"]) { n++; if (!first) first = f["req"] } }
+  END { print n + 0, first }' "$1"; }
+for n in 3 25; do
+  run --seed 1 --turns "$n" --out "$tmp/k$n.hist" > /dev/null
+  run --seed 1 --turns "$n" --no-key --out "$tmp/n$n.hist" > /dev/null
+  for h in k n; do [ -z "$(failing "$tmp/$h$n.hist" I3)" ] || fail "Q: I3 failed, $n turns, $h"; done
+done
+[ "$(stale "$tmp/k3.hist")" = "0 " ] || fail "Q2: stale-key hits at 3 turns: $(stale "$tmp/k3.hist")"
+[ "$(stale "$tmp/k25.hist")" = "70 r925" ] || fail "Q3: stale-key hits at 25 turns: $(stale "$tmp/k25.hist")"
+echo "Q1-Q4 I3: passes at 3 and 25 turns, with and without the key; 70 stale-key hits from r925 (turn 23), all equal"
+
+# --turns 2 is the default: the history is byte-identical.
+run --seed 7 --fault-rate 30 --turns 2 --out "$tmp/f3.hist" > /dev/null
+cmp -s "$tmp/f.hist" "$tmp/f3.hist" || fail "--turns 2 differs from the default"
+
 # P10: the same seed gives the same history.
 run --seed 7 --fault-rate 30 --out "$tmp/f2.hist" > /dev/null
 cmp -s "$tmp/f.hist" "$tmp/f2.hist" || fail "P10: seed 7 is not reproducible"

@@ -3,7 +3,7 @@
 // and write a shoke-history/v1 file. See docs/ADAPTER-RISE.md.
 //
 //   node adapters/rise-worker/run.mjs --rise PATH [--seed N] [--fault-rate PCT] [--mix CLASS]
-//        [--schema 2|3] [--no-key] --out FILE
+//        [--schema 2|3] [--no-key] [--turns N] --out FILE
 //
 // No network: the only destination the proxy accepts is the provider URL, which it answers
 // itself. Node built-ins only.
@@ -50,7 +50,7 @@ class Rng {
 if (new Rng(0).next() !== 0xE220A8397B1DCDAFn) throw new Error('SplitMix64 does not match shoke-core');
 
 function args(argv) {
-  const o = { seed: 0, faultRate: 0, mix: 'all', schema: 3, key: true };
+  const o = { seed: 0, faultRate: 0, mix: 'all', schema: 3, key: true, turns: 2 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -64,12 +64,14 @@ function args(argv) {
     else if (a === '--mix') o.mix = value();
     else if (a === '--schema') o.schema = Number(value());
     else if (a === '--no-key') o.key = false;
+    else if (a === '--turns') o.turns = Number(value());
     else throw new Error(`unknown argument ${a}`);
   }
   if (!o.rise || !o.out) throw new Error('--rise PATH and --out FILE are required');
   if (!(o.faultRate >= 0 && o.faultRate <= 100)) throw new Error('--fault-rate is a percentage');
   if (!MIXES[o.mix]) throw new Error(`--mix is one of ${Object.keys(MIXES).join(', ')}`);
   if (![2, 3].includes(o.schema)) throw new Error('--schema is 2 or 3');
+  if (!(Number.isInteger(o.turns) && o.turns >= 1)) throw new Error('--turns is a whole number, 1 or more');
   return o;
 }
 
@@ -176,7 +178,7 @@ async function main() {
   const recorded = Object.fromEntries(readJson(rise, FIXTURE).rows.map(r => [r.id, r.decision]));
   const cases = readJson(rise, CASES).map(c => ({ id: c.id, intent: c.intent, replay: c.id }));
   const turn = [...cases, ...PROBES];
-  const requests = [...turn, ...turn];
+  const requests = Array.from({ length: o.turns }, () => turn).flat();
   const cat = catalog(rise);
   const bookIndex = new Map(cat.books.map((b, i) => [b.work_id, i]));
   const env = { DECISION_PROVIDER: 'jev', OPENROUTER_API_KEY: 'fixture-only',
@@ -189,6 +191,8 @@ async function main() {
   const meta = { target: 'rise-worker', rise_commit: commit, fixture: FIXTURE, seed: o.seed,
     schema: o.schema, fault_rate: o.faultRate, mix: o.mix, deadline_ms: DEADLINE_MS, max_calls: 1,
     menu_wpm: PACE_MENU, floor: false, sound_rank: 'silent:0,night-drive:3,other:2' };
+  // Written only when it differs from the default, so a default history is unchanged.
+  if (o.turns !== 2) meta.turns = o.turns;
   for (const [k, v] of Object.entries(meta)) out.push(`meta ${k}=${enc(v)}`);
 
   const current = { observed: null };

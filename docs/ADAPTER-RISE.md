@@ -109,3 +109,20 @@ What the Worker source says (`worker/jev-recommend.mjs`, `worker/jev-variance.mj
 | Q2 | 3 turns, `--no-key`: I3 still passes. A turn-3 hit can only reuse the answer from turn 2's key or an unbroken run of the same key, which is also the latest model answer for that text. The cohort case P6 described cannot occur with these intents. | Medium |
 | Q3 | 25 turns, `--no-key`: I3 fails, only on turn-25 requests. Turn 25 reuses the turn-1 key. Where turn 24 wrote a different answer for the same text (the recorded sound was on one shortlist and replaced by `silent` on the other), the text-keyed check sees a stale hit. Between 1 and 10 flags. | Medium |
 | Q4 | 25 turns, with the Worker's key: I3 passes. The Worker's hit equals the answer stored under its own key. | High |
+
+### Results, round 2, against RISE `082b3fa`
+
+`adapters/rise-worker/check.sh` asserts each of these. Seed 1, no faults.
+
+| # | Outcome | Detail |
+|---|---|---|
+| Q1 | **Confirmed** | 3 turns with the key: I3 passes. |
+| Q2 | **Confirmed** | 3 turns without the key: I3 passes. No turn-3 hit reuses a key other than the one behind the latest model answer for its text. |
+| Q3 | **Refuted** | 25 turns without the key: I3 passes. Old keys do come back, and earlier than predicted: 70 hits reuse an older key than the latest model answer for the same text, the first on turn 23 (r925), because the shortlist start wraps inside the filled positions before it wraps in the catalog. But in all 70 the old plan equals the new one, down to the sound. The replay gives each intent one recorded answer, so two turns can only differ by a substituted sound, and none of these did. |
+| Q4 | **Confirmed** | 25 turns with the key: I3 passes. |
+
+So the Worker does serve an older key's entry for the same text, and I3 would catch it if the plan
+differed (`i3_catches_a_cache_hit_that_differs_from_the_model`). What this adapter cannot do is make
+the plans differ: that needs a provider that answers the same intent differently on different
+turns, and one recorded answer per intent is not that. The cohort case P6 described never arises:
+none of the 42 intents is open-ended, so every key ends in `:0`.
