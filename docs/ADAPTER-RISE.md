@@ -86,3 +86,26 @@ sound arc the recording never had.
 
 The roadmap's phase 2 exit test ("finds the keyword misfire and the missing fallback with a
 replayable seed") passes against the real Worker source, driven by recorded answers.
+
+## Predictions, round 2
+
+Written before any run with more than 2 turns. P6 was refuted because each intent was asked only
+twice. `--turns N` asks the same 42 intents N times; the default stays 2.
+
+What the Worker source says (`worker/jev-recommend.mjs`, `worker/jev-variance.mjs`):
+
+- The variation cohort applies only to open-ended requests ("surprise me", "what should I read").
+  None of the 42 intents is one, so the cohort is null and every decision key ends in `:0`.
+- The key also covers the 9-sound shortlist. Where the intent's words do not fill the shortlist,
+  the rest is filled in catalog order starting one place further on each turn (turn mod 24). The
+  start only moves forward, so a key that changed does not come back until the start wraps to 0
+  on turn 25.
+- A recorded sound missing from a turn's shortlist is replaced with the first offered choice,
+  which is `silent`. So two turns of one intent can give different plans.
+
+| # | Prediction | Confidence |
+|---|---|---|
+| Q1 | 3 turns, with the Worker's key: I3 passes. | High |
+| Q2 | 3 turns, `--no-key`: I3 still passes. A turn-3 hit can only reuse the answer from turn 2's key or an unbroken run of the same key, which is also the latest model answer for that text. The cohort case P6 described cannot occur with these intents. | Medium |
+| Q3 | 25 turns, `--no-key`: I3 fails, only on turn-25 requests. Turn 25 reuses the turn-1 key. Where turn 24 wrote a different answer for the same text (the recorded sound was on one shortlist and replaced by `silent` on the other), the text-keyed check sees a stale hit. Between 1 and 10 flags. | Medium |
+| Q4 | 25 turns, with the Worker's key: I3 passes. The Worker's hit equals the answer stored under its own key. | High |
