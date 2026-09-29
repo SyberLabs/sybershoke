@@ -138,26 +138,50 @@ fn corrupt(mut p: Plan, rng: &mut Rng) -> Plan {
     p
 }
 
-/// One provider call starting at `at`. `last_call` tracks the previous call's start so a
-/// scale-to-zero host can go cold.
+/// The model host's warmth. A scale-to-zero host goes cold after [`IDLE_COLD_MS`] without a call,
+/// and a call that arrives while it boots waits for the boot to finish.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Host {
+    /// Start of the previous call.
+    pub last_call: Option<u64>,
+    /// When the current boot finishes.
+    pub ready_at: u64,
+}
+
+impl Host {
+    pub fn warm_at(t: u64) -> Host {
+        Host {
+            last_call: Some(t),
+            ready_at: t,
+        }
+    }
+}
+
+/// One provider call starting at `at`.
 pub fn call(
     profile: Profile,
     faults: &[JevFault],
     text: &str,
     at: u64,
-    last_call: &mut Option<u64>,
+    host: &mut Host,
     rng: &mut Rng,
 ) -> Response {
     let mut latency = match profile {
         Profile::Jev => 600 + rng.below(1900),
         Profile::KevWarm | Profile::KevScaleToZero => 60 + rng.below(340),
     };
-    if profile == Profile::KevScaleToZero
-        && last_call.is_none_or(|last| at.saturating_sub(last) > IDLE_COLD_MS)
-    {
-        latency = COLD_START_MS + rng.below(3000);
+    if profile == Profile::KevScaleToZero {
+        if at < host.ready_at {
+            latency += host.ready_at - at;
+        } else if host
+            .last_call
+            .is_none_or(|last| at.saturating_sub(last) > IDLE_COLD_MS)
+        {
+            latency = COLD_START_MS + rng.below(3000);
+            host.ready_at = at + latency;
+        }
     }
-    *last_call = Some(at);
+    host.last_call = Some(at);
 
     let mut kind = Kind::Ok(model_answer(text));
     for f in faults.iter().filter(|f| f.active(at)) {
@@ -222,7 +246,7 @@ mod tests {
             dur: 1000,
             kind: FaultKind::Http(503),
         }];
-        let mut last = None;
+        let mut last = Host::default();
         let r = call(Profile::Jev, &faults, "x", 10, &mut last, &mut Rng::new(1));
         assert_eq!(r.kind, Kind::Http(503));
         assert!(r.latency < 200);
@@ -240,7 +264,7 @@ mod tests {
 
     #[test]
     fn scale_to_zero_goes_cold_after_idle_only() {
-        let mut last = None;
+        let mut last = Host::default();
         let first = call(
             Profile::KevScaleToZero,
             &[],
@@ -254,20 +278,38 @@ mod tests {
             Profile::KevScaleToZero,
             &[],
             "x",
-            5000,
+            45_000,
             &mut last,
             &mut Rng::new(1),
         );
-        assert!(warm.latency < 1000, "second call is warm");
+        assert!(warm.latency < 1000, "once booted, the next call is warm");
         let cold = call(
             Profile::KevScaleToZero,
             &[],
             "x",
-            5000 + IDLE_COLD_MS + 1,
+            45_000 + IDLE_COLD_MS + 1,
             &mut last,
             &mut Rng::new(1),
         );
         assert!(cold.latency >= COLD_START_MS, "after idle it is cold again");
+    }
+
+    #[test]
+    fn a_call_during_a_cold_start_waits_for_it() {
+        let mut host = Host::warm_at(0);
+        let at = IDLE_COLD_MS + 10_000;
+        let first = call(Profile::KevScaleToZero, &[], "x", at, &mut host, &mut Rng::new(1));
+        assert!(first.latency >= COLD_START_MS);
+        // 1.6 s later the host is still booting: the answer cannot come before it is ready.
+        let second = call(
+            Profile::KevScaleToZero,
+            &[],
+            "y",
+            at + 1600,
+            &mut host,
+            &mut Rng::new(2),
+        );
+        assert!(at + 1600 + second.latency >= at + first.latency, "{second:?}");
     }
 
     #[test]
@@ -277,7 +319,7 @@ mod tests {
             dur: 1000,
             kind: FaultKind::OutOfMenu,
         }];
-        let mut last = None;
+        let mut last = Host::default();
         let r = call(Profile::Jev, &faults, "x", 1, &mut last, &mut Rng::new(3));
         match r.kind {
             Kind::OutOfMenu(p) => assert!(!p.is_valid()),

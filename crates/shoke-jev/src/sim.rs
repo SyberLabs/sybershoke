@@ -208,7 +208,7 @@ pub fn simulate(cfg: &Config, sc: &Scenario) -> History {
     let mut cache: HashMap<String, (u64, Plan, &'static str)> = HashMap::new();
     // The host starts warm at t=0. Starting cold would make request 1 of every run hit the
     // 35 s cold start and drown out the effect worth measuring: idle gaps in the traffic.
-    let mut last_call: Option<u64> = Some(0);
+    let mut host = provider::Host::warm_at(0);
 
     for (idx, rq) in sc.requests.iter().enumerate() {
         h.push(
@@ -237,7 +237,7 @@ pub fn simulate(cfg: &Config, sc: &Scenario) -> History {
                 &sc.faults,
                 &rq.text,
                 t,
-                &mut last_call,
+                &mut host,
                 &mut rng,
             );
             let arrive = t + resp.latency;

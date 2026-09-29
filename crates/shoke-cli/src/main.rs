@@ -3,6 +3,7 @@
 mod report;
 
 use shoke_core::{check, History, Invariant};
+use shoke_jev::invariants::limits;
 use shoke_jev::{
     default_set, minimal, simulate, sweep, Bug, Config, JevFault, Mix, Profile, Scenario, SweepOpts,
 };
@@ -122,6 +123,27 @@ fn parse_opts(args: &[String]) -> Result<Opts, String> {
     Ok(o)
 }
 
+/// Inputs that would otherwise report a PASS for work that was never done.
+fn generated(o: &Opts) -> Result<(), String> {
+    if let Some(extra) = o.positional.first() {
+        return Err(format!("unexpected argument `{extra}`"));
+    }
+    if o.requests == 0 {
+        return Err("--requests must be at least 1".into());
+    }
+    Ok(())
+}
+
+fn seed_range(o: &Opts) -> Result<(), String> {
+    if o.seeds == 0 {
+        return Err("--seeds must be at least 1".into());
+    }
+    o.seed
+        .checked_add(o.seeds - 1)
+        .map(|_| ())
+        .ok_or_else(|| format!("seeds {} + {} run past the largest seed", o.seed, o.seeds))
+}
+
 fn config_of(o: &Opts) -> Config {
     let mut cfg = Config::new(o.profile);
     cfg.floor = o.floor;
@@ -154,6 +176,7 @@ fn fault_lines(faults: &[JevFault]) -> String {
 }
 
 fn cmd_run(o: &Opts) -> Result<ExitCode, String> {
+    generated(o)?;
     let cfg = config_of(o);
     let sc = Scenario::generate(o.seed, o.requests, o.faults, o.mix);
     let history = simulate(&cfg, &sc);
@@ -194,6 +217,8 @@ fn print_minimal(
 }
 
 fn cmd_sweep(o: &Opts) -> Result<ExitCode, String> {
+    generated(o)?;
+    seed_range(o)?;
     let cfg = config_of(o);
     let invs = default_set(o.require_floor);
     let opts = SweepOpts {
@@ -236,6 +261,7 @@ fn cmd_sweep(o: &Opts) -> Result<ExitCode, String> {
 }
 
 fn cmd_shrink(o: &Opts) -> Result<ExitCode, String> {
+    generated(o)?;
     let cfg = config_of(o);
     let invs = default_set(o.require_floor);
     let sc = Scenario::generate(o.seed, o.requests, o.faults, o.mix);
@@ -259,13 +285,22 @@ fn cmd_shrink(o: &Opts) -> Result<ExitCode, String> {
 }
 
 fn cmd_check(o: &Opts) -> Result<ExitCode, String> {
-    let path = o.positional.first().ok_or("check needs a FILE")?;
+    let path = match o.positional.as_slice() {
+        [path] => path,
+        [] => return Err("check needs a FILE".into()),
+        [_, extra, ..] => return Err(format!("unexpected argument `{extra}`")),
+    };
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
     let history = History::from_text(&text).map_err(|e| format!("{path}: {e}"))?;
+    let (deadline, cap) = limits(&history).map_err(|e| format!("{path}: {e}"))?;
+    if history.of_kind("req").next().is_none() {
+        return Err(format!("{path}: no requests, so nothing to check"));
+    }
     let invs = default_set(o.require_floor);
     let report = check(&invs, &history);
+    // The file sets its own bar, so say which bar was applied.
     println!(
-        "check {path}  ({} events, {} meta)",
+        "check {path}  ({} events, {} meta)  deadline_ms={deadline} max_calls={cap}",
         history.events.len(),
         history.meta.len()
     );
@@ -278,6 +313,8 @@ fn cmd_check(o: &Opts) -> Result<ExitCode, String> {
 }
 
 fn cmd_report(o: &Opts) -> Result<ExitCode, String> {
+    generated(o)?;
+    seed_range(o)?;
     print!(
         "{}",
         report::render(o.seeds, o.requests, o.faults, o.max_runs)

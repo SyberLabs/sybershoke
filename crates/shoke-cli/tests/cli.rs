@@ -142,3 +142,40 @@ fn bugs_lists_all_six() {
     assert_eq!(code(&o), 0);
     assert_eq!(stdout(&o).lines().count(), 6);
 }
+
+#[test]
+fn inputs_that_would_pass_vacuously_are_usage_errors() {
+    for args in [
+        &["sweep", "--seeds", "0"][..],
+        &["run", "--requests", "0"],
+        &["sweep", "--seed", "18446744073709551615", "--seeds", "2"],
+        &["run", "5", "--seed", "1"],
+        &["report", "--seeds", "0"],
+    ] {
+        let o = shoke(args);
+        assert_eq!(code(&o), 2, "{args:?}: {}", stdout(&o));
+    }
+    // The last seed of the range is still usable on its own.
+    let o = shoke(&["sweep", "--seed", "18446744073709551615", "--seeds", "1"]);
+    assert_eq!(code(&o), 0, "{}", stdout(&o));
+}
+
+#[test]
+fn check_rejects_histories_it_cannot_judge_and_names_its_bar() {
+    let cases = [
+        ("empty", "shoke-history/v1\n"),
+        ("bad-deadline", "shoke-history/v1\nmeta deadline_ms=8s\n0 req id=r1 text=x\n"),
+        (
+            "two-deadlines",
+            "shoke-history/v1\nmeta deadline_ms=99999999\nmeta deadline_ms=8000\n0 req id=r1 text=x\n",
+        ),
+    ];
+    for (name, text) in cases {
+        let f = temp_file(name);
+        std::fs::write(&f, text).unwrap();
+        assert_eq!(code(&shoke(&["check", &f])), 2, "{name}");
+        let _ = std::fs::remove_file(f);
+    }
+    let o = shoke(&["check", &golden("clean.hist")]);
+    assert!(stdout(&o).contains("deadline_ms=8000 max_calls=2"), "{}", stdout(&o));
+}

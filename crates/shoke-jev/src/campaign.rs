@@ -39,7 +39,8 @@ pub fn sweep(cfg: &Config, opts: &SweepOpts, invariants: &[Box<dyn Invariant>]) 
         seeds: opts.seeds,
         ..SweepResult::default()
     };
-    for seed in opts.start..opts.start + opts.seeds {
+    // Exactly `opts.seeds` seeds, even near the top of the range: never fewer than reported.
+    for seed in (0..opts.seeds).map(|i| opts.start.wrapping_add(i)) {
         let sc = Scenario::generate(seed, opts.requests, opts.faults, opts.mix);
         let report = check(invariants, &simulate(cfg, &sc));
         for id in report.failing() {

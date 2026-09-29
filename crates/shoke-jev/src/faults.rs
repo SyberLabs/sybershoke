@@ -28,7 +28,7 @@ pub struct JevFault {
 
 impl JevFault {
     pub fn active(&self, t: u64) -> bool {
-        t >= self.at && t < self.at + self.dur
+        t >= self.at && t - self.at < self.dur
     }
 }
 
@@ -49,19 +49,27 @@ impl fmt::Display for JevFault {
 const MIN_DUR: u64 = 250;
 
 impl Simplify for JevFault {
-    /// Shorter, earlier, weaker. Each candidate strictly lowers `dur`, `at` or the slow amount,
-    /// which is what guarantees the shrinker terminates.
+    /// Shorter, earlier, weaker. A window shrinks from either side: keeping its start or keeping
+    /// its end, so it can close in on a call that starts late in the window. Every candidate
+    /// strictly lowers `(dur, slow amount, at)` in that order, which is what guarantees the
+    /// shrinker terminates.
     fn simpler(&self) -> Vec<Self> {
         let mut out = Vec::new();
         if self.dur > MIN_DUR {
-            let mut short = self.clone();
-            short.dur = MIN_DUR;
-            out.push(short);
             let half = (self.dur / 2).max(MIN_DUR);
-            if half != MIN_DUR {
-                let mut f = self.clone();
-                f.dur = half;
-                out.push(f);
+            let durs = if half == MIN_DUR {
+                vec![MIN_DUR]
+            } else {
+                vec![MIN_DUR, half]
+            };
+            for dur in durs {
+                let mut keep_start = self.clone();
+                keep_start.dur = dur;
+                let mut keep_end = self.clone();
+                keep_end.at = self.at + (self.dur - dur);
+                keep_end.dur = dur;
+                out.push(keep_start);
+                out.push(keep_end);
             }
         }
         if self.at > 0 {
@@ -177,6 +185,41 @@ mod tests {
             }
         }
         panic!("simplification did not terminate: {f}");
+    }
+
+    #[test]
+    fn every_candidate_lowers_the_measure() {
+        let measure = |f: &JevFault| {
+            let x = match f.kind {
+                FaultKind::Slow(x) => x,
+                _ => 0,
+            };
+            (f.dur, x, f.at)
+        };
+        let f = JevFault {
+            at: 9000,
+            dur: 12_000,
+            kind: FaultKind::Slow(20_000),
+        };
+        for c in f.simpler() {
+            assert!(measure(&c) < measure(&f), "{c} does not shrink {f}");
+        }
+    }
+
+    #[test]
+    fn a_window_can_shrink_onto_its_last_moment() {
+        // Only t = 9999 matters: the only way down is to keep the window's end.
+        let fails = |f: &JevFault| f.active(9999);
+        let mut f = JevFault {
+            at: 0,
+            dur: 10_000,
+            kind: FaultKind::Truncate,
+        };
+        while let Some(next) = f.simpler().into_iter().find(fails) {
+            f = next;
+        }
+        assert_eq!(f.dur, MIN_DUR, "{f}");
+        assert!(f.active(9999));
     }
 
     #[test]
