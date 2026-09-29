@@ -239,7 +239,7 @@ was published or pushed, and no maintainer was contacted.
 ## Phase 2: what was fixed
 
 Each fix has a regression test that fails on the zip's code and passes now. Tests went from 76 to
-97. Every number in this document is reproduced by `redteam/sensitivity.sh`, `redteam/search.sh` or
+89. Every number in this document is reproduced by `redteam/sensitivity.sh`, `redteam/search.sh` or
 the `redteam` probe (`cargo run --release --manifest-path redteam/Cargo.toml -- MODE`) on the
 current tree. The one exception is a "before" figure, which needs the zip.
 
