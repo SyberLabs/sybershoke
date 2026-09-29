@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Phase 2 exit test against a RISE checkout: the keyword misfire and the missing fallback, each
-# found with a replayable seed. Reproduces every result in docs/ADAPTER-RISE.md.
+# found with a replayable seed; also the sound rank (P8) and I3 over more turns (Q1-Q4).
+# Reproduces every result in docs/ADAPTER-RISE.md.
 #   adapters/rise-worker/check.sh /path/to/RISE
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -22,6 +23,28 @@ run --seed 1 --schema 3 --out "$tmp/s3.hist" > "$tmp/s3.txt"
 slow=$(chk "$tmp/s3.hist" | grep '"slow/sleep/calm"' | awk '{print $1}' | sort -u | tr '\n' ' ')
 [ "$slow" = "r40 r41 r82 r83 " ] || fail "P1 misfire: slow violations on [$slow]"
 echo "P1 misfire, schema 3: 'drift off to sleep' raised to 300 wpm on $slow"
+
+# P8, with the sound rank read from RISE's descriptions: on the 39 cases (not the probes r40-r42,
+# r82-r84), only "soft bossa" and "quiet mystery" stay flagged, on both turns.
+i4=$(failing "$tmp/s3.hist" I4 | grep -vxE 'r(40|41|42|82|83|84)' | sort -V | tr '\n' ' ')
+[ "$i4" = "r23 r26 r65 r68 " ] || fail "P8: clean-case I4 flags on [$i4]"
+ranked=$(grep '^meta sound_rank=' "$tmp/s3.hist" | cut -d= -f2 | tr ',' '\n' | grep -cvE '^(silent|other):')
+sounds=$(grep -cE "^  \('[a-z-]+', '.*', TRUE\)" "$rise/scripts/seed-rise-sounds.sql")
+[ "$ranked" -eq 7 ] && [ "$sounds" -eq 24 ] || fail "sound rank: $ranked ranked of $sounds sounds"
+echo "P8 sound rank: clean-case I4 flags on $i4; $ranked of $sounds sounds ranked 1 or 3"
+
+# The rank table cites a word from each description; a RISE that drops the word stops the run.
+drift="$tmp/drift"
+mkdir -p "$drift/scripts"
+ln -s "$(cd "$rise" && pwd)/worker" "$drift/worker"
+ln -s "$(cd "$rise" && pwd)/src" "$drift/src"
+for f in "$rise"/scripts/jev-eval-*.json; do ln -s "$(cd "$(dirname "$f")" && pwd)/$(basename "$f")" "$drift/scripts/"; done
+sed 's/Gentle piano melody/Plain piano melody/' "$rise/scripts/seed-rise-sounds.sql" > "$drift/scripts/seed-rise-sounds.sql"
+if node adapters/rise-worker/run.mjs --rise "$drift" --out "$tmp/drift.hist" 2> "$tmp/drift.txt"; then
+  fail "sound rank: a description without its cited word was accepted"
+fi
+grep -q 'description of piano no longer says "Gentle"' "$tmp/drift.txt" || fail "sound rank: $(cat "$tmp/drift.txt")"
+echo "sound rank: a description that drops its cited word stops the run"
 
 # P2: schema 2 offers no neon, so no misfire.
 run --seed 1 --schema 2 --out "$tmp/s2.hist" > /dev/null

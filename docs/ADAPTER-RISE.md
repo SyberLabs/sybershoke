@@ -26,10 +26,34 @@ and marks the call `adapted=audio`. An answer the recording never gave is never 
 | History field | From the Worker's config |
 |---|---|
 | `wpm` | `wpm`. The menu is declared with `meta menu_wpm=100,150,200,250,300,400,500` |
-| `sound` | 0 when `audio` is `silent`, 3 for `night-drive`, 2 for any other sound. **This rank is an assumption**: RISE does not rank its sounds by loudness |
+| `sound` | A loudness rank read from RISE's own sound descriptions (see below), declared with `meta sound_rank` |
 | `visual` | 0 when `visualMode` is `off`, 3 when the palette is `neon`, 1 otherwise |
 | `book` | Position of `workId` in the 15-book release catalog |
 | `key` | The decision cache key the Worker read or wrote, observed at the Redis stand-in |
+
+### Sound rank
+
+RISE does not rank its sounds by loudness. The adapter reads a rank from the words in RISE's own
+sound descriptions (`scripts/seed-rise-sounds.sql`): 1 where the description says soft, gentle,
+quiet or calm; 3 where it says beat, driving, fast or energy; 2 otherwise; `silent` is 0. This is
+still an interpretation, not a ranking RISE owns.
+
+| Rank | Sound | Word in RISE's description |
+|---|---|---|
+| 0 | silent | (no sound) |
+| 1 | aurora | "Soft, spacious harmonics for calm ..." |
+| 1 | piano | "Gentle piano melody ..." |
+| 1 | lullaby | "A soft, rocking keyboard lullaby ... gentle care" |
+| 1 | nocturne | "A quiet night piece ..." |
+| 1 | starlight | "... for cosmic calm and night skies" |
+| 3 | ragtime | "... buoyant energy" |
+| 3 | night-drive | "Fast electronic beat ... high energy" |
+| 2 | the other 17 | none of the words |
+
+Near misses, left at 2: waltz says "three-beat", which is its meter; excited and thrilling say
+"No beat"; only soft-rain's id says soft, not its description; bossa says "light", blues
+"relaxed", chase "quick". The adapter checks that each cited word is still in RISE's description
+and stops if it is not, so the table cannot drift from the source silently.
 
 ## Predictions, written before the first run
 
@@ -61,7 +85,8 @@ replayable seed". P1 and P3 are those two findings; P10 is the replayable seed.
 
 ## Results against RISE `082b3fa`
 
-Reproduce with `adapters/rise-worker/check.sh /path/to/RISE`, which asserts P1, P2, P3, P7 and P10.
+Reproduce with `adapters/rise-worker/check.sh /path/to/RISE`, which asserts P1, P2, P3, P7, P8 and
+P10.
 
 | # | Outcome | Detail |
 |---|---|---|
@@ -69,9 +94,9 @@ Reproduce with `adapters/rise-worker/check.sh /path/to/RISE`, which asserts P1, 
 | P2 | **Confirmed** | Schema 2: p1 at 100 wpm, p2 at 150. |
 | P3 | **Confirmed** | Seed 7, 30% faults: all 25 faulted requests end in an error, none with a plan. I1, I3 and I5 pass. |
 | P4, P5 | **Confirmed** | I5 and I1 pass in every run. |
-| P6 | **Refuted** | I3 passes even without the Worker's key. With two asks per intent, a hit can only follow the model answer for its own cohort. Breaking it needs a third ask (cohort A answered, cohort B answered, then a hit on A), which this scenario never makes. Still open. |
+| P6 | **Refuted** | I3 passes even without the Worker's key. With two asks per intent, a hit can only follow the model answer for its own cohort. Breaking it needs a third ask (cohort A answered, cohort B answered, then a hit on A), which this scenario never makes. Tested with `--turns` in round 2 below. |
 | P7 | **Confirmed** | Seed 3, timeouts only: 14 of 14 end at 8001 ms, 1 ms past a per-request 8 s. Whether the 8 s is per request or per call is for the spec's owner. |
-| P8 | **Confirmed in count, cause narrower** | 7 I4 flags on the clean cases. All 7 are "soft" or "quiet" against a non-silent sound: the sound-rank mapping, not the Worker. None came from "calm" or "gentle"; those cases were recorded at 200 wpm or slower. |
+| P8 | **Confirmed in count, cause narrower** | Under the first sound rank (silent 0, night-drive 3, every other sound 2; commit `5253c37`), 7 I4 flags on the clean cases. All 7 were "soft" or "quiet" against a non-silent sound: the sound-rank mapping, not the Worker. None came from "calm" or "gentle"; those cases were recorded at 200 wpm or slower. With the rank read from RISE's descriptions, 4 remain: "I'd like a soft bossa nova backing." (r23, r65) and "Give the background a quiet mystery." (r26, r68). Jev chose the sound the reader named, and RISE describes bossa as "light" and mystery as "sparse", neither of which the rule reads as quiet. Whether they are quiet is for RISE to say. |
 | P9 | **Confirmed** | 7 calls replayed a recorded sound that was not on that turn's 9-sound shortlist and were marked `adapted=audio`. One of them is p1; its misfire comes from the override, not the substitution (the recorded pace, 100, was kept). |
 | P10 | **Confirmed** | Seed 7 twice gives byte-identical histories. |
 

@@ -106,6 +106,12 @@ function catalog(rise) {
     .filter(m => m[3] === 'TRUE')
     .map(m => ({ sound_id: m[1], decision_criterion: m[2].replaceAll("''", "'").replace(/\s+/g, ' '),
       active: true }));
+  for (const [id, [, word]] of Object.entries(SOUND_RANK)) {
+    const row = sounds.find(r => r.sound_id === id);
+    if (!row || !row.decision_criterion.includes(word)) {
+      throw new Error(`sound rank: RISE's description of ${id} no longer says "${word}"`);
+    }
+  }
   const options = [
     ...['literary', 'display', 'thick', 'jp', 'mono', 'sans', 'book']
       .map(id => ({ kind: 'chamberFace', id, description: 'Reviewed face.' })),
@@ -166,9 +172,20 @@ function proxy(plan, observed) {
   };
 }
 
+// Loudness rank for the history's `sound` field, read from RISE's own sound descriptions
+// (scripts/seed-rise-sounds.sql). Rank 1 where the description says soft, gentle, quiet or calm;
+// rank 3 where it says beat, driving, fast or energy; 2 otherwise. Each entry cites the word, and
+// catalog() fails if RISE's description no longer contains it. An interpretation, not RISE's ranking.
+// Left at 2 on purpose: waltz ("three-beat" is its meter), excited and thrilling ("No beat"),
+// soft-rain (only its id says soft), bossa ("light"), blues ("relaxed"), chase ("quick").
+const SOUND_RANK = {
+  aurora: [1, 'Soft'], piano: [1, 'Gentle'], lullaby: [1, 'gentle'], nocturne: [1, 'quiet'],
+  starlight: [1, 'calm'], ragtime: [3, 'energy'], 'night-drive': [3, 'Fast']
+};
+
 function soundRank(audio) {
   if (audio === 'silent') return 0;
-  return audio === 'night-drive' ? 3 : 2;
+  return SOUND_RANK[audio]?.[0] ?? 2;
 }
 
 async function main() {
@@ -190,7 +207,8 @@ async function main() {
   const out = ['shoke-history/v1'];
   const meta = { target: 'rise-worker', rise_commit: commit, fixture: FIXTURE, seed: o.seed,
     schema: o.schema, fault_rate: o.faultRate, mix: o.mix, deadline_ms: DEADLINE_MS, max_calls: 1,
-    menu_wpm: PACE_MENU, floor: false, sound_rank: 'silent:0,night-drive:3,other:2' };
+    menu_wpm: PACE_MENU, floor: false, sound_rank: ['silent:0',
+      ...Object.entries(SOUND_RANK).map(([id, [rank]]) => `${id}:${rank}`), 'other:2'].join(',') };
   // Written only when it differs from the default, so a default history is unchanged.
   if (o.turns !== 2) meta.turns = o.turns;
   for (const [k, v] of Object.entries(meta)) out.push(`meta ${k}=${enc(v)}`);
