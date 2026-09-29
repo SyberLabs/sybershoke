@@ -65,12 +65,18 @@ i7=$(failing "$tmp/f.hist" I7 | wc -l)
 for inv in I1 I3 I5; do [ -z "$(failing "$tmp/f.hist" $inv)" ] || fail "P3: $inv failed"; done
 echo "P3 missing fallback: $faults faults, $i7 requests with no plan; I1 I3 I5 pass"
 
-# P7: a timeout ends 1 ms past the 8 s mark, because the Worker's 8 s covers only the call.
+# P7: the Worker's 8 s covers the provider call (meta deadline_scope=call). Each timeout's resp
+# comes exactly 8000 ms after its call, and no timeout fails I2.
 run --seed 3 --fault-rate 20 --mix slow --out "$tmp/t.hist" > "$tmp/t.txt"
 timeouts=$(grep -o 'faults=[0-9]*' "$tmp/t.txt" | cut -d= -f2)
-late=$(chk "$tmp/t.hist" | grep -c 'answered after 8001 ms' || true)
-[ "$timeouts" -eq "$late" ] || fail "P7: $timeouts timeouts, $late late"
-echo "P7 deadline: $late of $timeouts timeouts end at 8001 ms"
+grep -qx 'meta deadline_scope=call' "$tmp/t.hist" || fail "P7: history does not declare deadline_scope=call"
+at8000=$(awk '$2=="call" { for (i = 3; i <= NF; i++) if ($i ~ /^req=/) c[substr($i, 5)] = $1 }
+  $2=="resp" && / status=timeout/ { for (i = 3; i <= NF; i++) if ($i ~ /^req=/) r = substr($i, 5)
+    if ($1 - c[r] == 8000) n++ } END { print n + 0 }' "$tmp/t.hist")
+i2=$(failing "$tmp/t.hist" I2 | wc -l)
+[ "$timeouts" -gt 0 ] && [ "$at8000" -eq "$timeouts" ] || fail "P7: $timeouts timeouts, $at8000 at call+8000"
+[ "$i2" -eq 0 ] || fail "P7: $i2 requests fail I2 under the call deadline"
+echo "P7 deadline: $at8000 of $timeouts timeouts end at call+8000 ms; none fails I2 under deadline_scope=call"
 
 # Q1-Q4: I3 over 3 and 25 turns, with and without the Worker's key.
 # Cache hits whose key differs from the latest model answer's key for the same text, then the first.
