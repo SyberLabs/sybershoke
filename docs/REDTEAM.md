@@ -274,11 +274,15 @@ correct-pipeline runs, zero violations.
   are a MiniLM similarity baseline, not Kev. Recording Kev on the 39 cases means calling it, which
   is the owner's decision. The roadmap's order then holds phase 4 (Fanout, I6), whose inputs were
   not supplied either.
-- **I3's cohort case is unexercised.** The adapter asks each intent twice. Three asks would test
-  whether a stale cohort hit is caught (`docs/ADAPTER-RISE.md`, P6).
-- **I4 on real histories is only as good as the sound-rank mapping.** RISE does not rank its sounds
-  by loudness, so every "soft" or "quiet" request with a non-silent sound is flagged. That accounts
-  for all 7 clean-run I4 flags. A loudness rank for RISE's 24 sounds needs an owner.
+- **I3 on real histories cannot yet see a stale hit.** `--turns` now asks each intent up to 25
+  times. The Worker does serve an older key's entry for the same text (70 times in 25 turns), but
+  each intent replays one recorded answer, so the old and new plans are equal and I3 passes with
+  or without the key. Catching a stale hit needs answers that differ by turn, which means recording
+  them. The cohort case never arises: none of the 42 intents is open-ended
+  (`docs/ADAPTER-RISE.md`, Q1-Q4).
+- **The sound rank is read from RISE's descriptions, not owned by RISE.** It clears 3 of the 7
+  clean-run I4 flags. The other 4 are "soft bossa" and "quiet mystery", whose descriptions say
+  "light" and "sparse". Whether those are quiet is RISE's call (`docs/ADAPTER-RISE.md`, P8).
 - **Whether 8 s is per request or per call** is a spec question. The Worker's own limit covers the
   call, so every timeout is 1 ms past a per-request 8 s.
 - **CI has still never run on GitHub.** Its four steps pass locally on a fresh copy.
