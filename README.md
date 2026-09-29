@@ -6,8 +6,10 @@ Sybershoke injects faults into a system, records what it did as a plain-text **h
 checks the history against **invariants**. This repository holds the harness and its first
 target: the Jev/Kev decision path that RISE uses to turn a reader's request into a reading plan.
 
-**Status: Research.** Nothing here has been run against a real Jev, Kev or the RISE Worker.
-The target is a model built from the project documents. See [Scope](#scope).
+**Status: Research.** The first target is a model built from the project documents. The RISE
+Worker adapter also runs the real Worker source against 39 recorded production Jev answers; it
+found a keyword misfire that is fixed in [SyberLabs/RISE#306](https://github.com/SyberLabs/RISE/pull/306).
+Nothing here has called Jev or Kev. See [Scope](#scope).
 
 ## Try it
 
@@ -89,6 +91,6 @@ each finding, and what was fixed. `redteam/` holds the probes, and `redteam/sear
 
 ## Open decisions
 
-From the roadmap, still open and not decided here: **name clearance** (others already use
-"sybershoke"), the **license** (none chosen, so this code is all rights reserved), the repository
-home, and the disclosure window before any third-party score is published.
+The repository lives at `SyberLabs/sybershoke`. **No license is granted**, so the code is all
+rights reserved. Still open: **name clearance** (others already use "sybershoke") and the disclosure
+window before any third-party score is published.

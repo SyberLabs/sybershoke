@@ -232,9 +232,8 @@ as in the report (`redteam/sensitivity.sh`):
 
 ## Not touched, by rule
 
-Name clearance, license and repository home are the owner's decisions. an unexplained lore item appears
-in no document I could read; I did not invent anything about it. No provider was called, nothing
-was published or pushed, and no maintainer was contacted.
+Name clearance, license and repository home are the owner's decisions. During the review no
+provider was called, nothing was published or pushed, and no maintainer was contacted.
 
 ## Phase 2: what was fixed
 
@@ -288,5 +287,6 @@ correct-pipeline runs, zero violations.
 - **CI has still never run on GitHub.** Its four steps pass locally on a fresh copy.
 - **The six project documents were never supplied.** Every fact this review took from them was
   checked against the RISE source instead, or is listed as unverified above.
-- Not mine to decide: name clearance, license, repository home, the disclosure window, and the
-  an unexplained lore item, which appears in no document I had.
+- The owner has since chosen the repository home (`SyberLabs/sybershoke`) and published it with no
+  license, so the code is all rights reserved. Name clearance and the disclosure window remain the
+  owner's decisions.
